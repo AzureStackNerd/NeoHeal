@@ -1,0 +1,22 @@
+## Interface: 16001
+## Title: NeoHeal
+## Notes: Small click-cast raid frames for party and raid healing.
+## Author: neoGore
+## Version: 0.2.0
+## IconTexture: Interface\Icons\Spell_Holy_FlashHeal
+## SavedVariables: NeoHealDB
+## SavedVariablesPerCharacter: NeoHealCharDB
+
+Locales\enUS.lua
+
+Core.lua
+Spells.lua
+Dispel.lua
+AuraContainer.lua
+Hots.lua
+ClickCast.lua
+UnitButton.lua
+Layout.lua
+Preview.lua
+Blizzard.lua
+Options.lua
