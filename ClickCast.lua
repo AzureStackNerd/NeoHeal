@@ -5,6 +5,7 @@
 --     { action = "spell", spellID = 2061, highestRank = true, target = "unit", alsoTarget = false }
 --     { action = "target", target = "targettarget" }
 --     { action = "menu" }
+--     { action = "buff" }   -- casts your missing buff (MissingBuffs.lua), or does nothing
 -- Each binding becomes secure button attributes, which is what lets the game cast
 -- on click even in combat. "shift-2" casting on the unit's target becomes:
 --     shift-type2 = "spell", shift-spell2 = 2061, shift-unitsuffix2 = "target"
@@ -48,7 +49,9 @@ ClickCast.TARGETS = {
     { value = "targettarget", label = L.TARGET_UNIT_TARGETTARGET },
 }
 
-local ACTION_TYPES = { spell = "spell", target = "target", menu = "togglemenu" }
+-- "neobuff" isn't a real action type: the click snippet (RES_SNIPPET) turns it into
+-- the buff cast, or cancels the click.
+local ACTION_TYPES = { spell = "spell", target = "target", menu = "togglemenu", buff = "neobuff" }
 
 -- Every binding key ("shift-2", "-neokey1", ...) and the attribute slots it owns.
 -- Slots without a binding are written as nil, which clears an old binding.
@@ -77,21 +80,37 @@ local RES_SPELLS = {
 
 table.insert(ClickCast.ATTRIBUTE_NAMES, "*type-neores")
 table.insert(ClickCast.ATTRIBUTE_NAMES, "*spell-neores")
+-- Buffing (MissingBuffs.lua): the spell attribute is set per button, the type here.
+table.insert(ClickCast.ATTRIBUTE_NAMES, "*type-neobuff")
 
 -- Runs in the secure environment (no access to addon Lua) before every click.
 -- Returning a button name makes the click use that button's attributes instead.
 ClickCast.RES_SNIPPET = [[
     local unit = self:GetAttribute("unit")
-    if not unit or not self:GetAttribute("*type-neores") then return end
-    if not SecureCmdOptionParse("[@" .. unit .. ",dead,help] res") then return end
+    if not unit then return end
 
-    -- Find out what this click would do; only a cast becomes the res.
+    -- Find out what this click would do.
     local prefix = (IsShiftKeyDown() and "shift-") or (IsControlKeyDown() and "ctrl-")
                 or (IsAltKeyDown() and "alt-") or ""
     local suffix = (button == "LeftButton" and "1") or (button == "RightButton" and "2")
                 or (button == "MiddleButton" and "3") or strmatch(button, "^Button(%d+)$")
                 or ("-" .. button)
     local action = self:GetAttribute(prefix .. "type" .. suffix)
+
+    -- "Cast missing buff": casts the buff MissingBuffs.lua put in "*spell-neobuff"
+    -- (only set out of combat, without ready check). [nocombat] is checked here as
+    -- well, so in combat it never buffs even if that attribute stayed. With
+    -- nothing to buff the click is cancelled: it does nothing at all.
+    if action == "neobuff" then
+        if self:GetAttribute("*spell-neobuff") and SecureCmdOptionParse("[nocombat] buff") then
+            return "neobuff"
+        end
+        return false
+    end
+
+    -- A cast on a dead friendly unit becomes the res.
+    if not self:GetAttribute("*type-neores") then return end
+    if not SecureCmdOptionParse("[@" .. unit .. ",dead,help] res") then return end
     if action == "spell" or action == "macro" then return "neores" end
 ]]
 
@@ -230,6 +249,7 @@ function ClickCast:Describe(binding)
     if not binding then return L.ACTION_NONE end
     if binding.action == "target" then return L.ACTION_TARGET end
     if binding.action == "menu" then return L.ACTION_MENU end
+    if binding.action == "buff" then return L.ACTION_BUFF end
 
     local name = Spells.GetName(binding.spellID) or ("#" .. binding.spellID)
     if not IsPlayerSpell(binding.spellID) then
@@ -295,7 +315,7 @@ function ClickCast:BuildAttributes()
                 if binding.action == "spell" then
                     attributes[prefix .. "spell" .. buttonId] = self:GetSpellValue(binding)
                 end
-                if binding.action ~= "menu" and binding.target ~= "unit" then
+                if binding.action ~= "menu" and binding.action ~= "buff" and binding.target ~= "unit" then
                     attributes[prefix .. "unitsuffix" .. buttonId] = binding.target
                 end
             end
@@ -307,6 +327,7 @@ function ClickCast:BuildAttributes()
         attributes["*type-neores"] = "spell"
         attributes["*spell-neores"] = resSpell
     end
+    attributes["*type-neobuff"] = "spell"
 
     local hoverSnippet = self:BuildHoverKeySnippet()
     if hoverSnippet then

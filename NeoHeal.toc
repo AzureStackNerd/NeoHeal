@@ -14,6 +14,7 @@ Spells.lua
 Dispel.lua
 AuraContainer.lua
 Hots.lua
+MissingBuffs.lua
 ClickCast.lua
 UnitButton.lua
 Layout.lua

@@ -157,6 +157,7 @@ local LAYOUT_SETTINGS = {
     { kind = "slider",   key = "scale",              label = L.SCALE,         min = 0.5, max = 2,   step = 0.05 },
     { kind = "checkbox", key = "showSolo",           label = L.SHOW_SOLO },
     { kind = "checkbox", key = "showRaidDebuffs",    label = L.SHOW_RAID_DEBUFFS },
+    { kind = "checkbox", key = "showMissingBuffs",   label = L.SHOW_MISSING_BUFFS },
     { kind = "checkbox", key = "showHotTimers",      label = L.SHOW_HOT_TIMERS },
     { kind = "checkbox", key = "showIncomingHeals",  label = L.SHOW_INCOMING_HEALS },
     { kind = "checkbox", key = "showAggro",          label = L.SHOW_AGGRO },
@@ -216,6 +217,7 @@ local function BuildActionMenu(root, key)
     root:CreateButton(L.ACTION_NONE, function() Choose(nil) end)
     root:CreateButton(L.ACTION_TARGET, function() Choose({ action = "target", target = target }) end)
     root:CreateButton(L.ACTION_MENU, function() Choose({ action = "menu" }) end)
+    root:CreateButton(L.ACTION_BUFF, function() Choose({ action = "buff" }) end)
     root:CreateDivider()
 
     local skillLines = NeoHeal.Spells.skillLines
@@ -326,7 +328,7 @@ local function CreateBindingRow(page, mouseButton)
         local binding = ClickCast:Get(Key())
         local isSpell = binding ~= nil and binding.action == "spell"
         action:OverrideText(ClickCast:Describe(binding))
-        target:SetEnabled(binding ~= nil and binding.action ~= "menu")
+        target:SetEnabled(binding ~= nil and binding.action ~= "menu" and binding.action ~= "buff")
         target:GenerateMenu()
         alsoTarget:SetEnabled(isSpell)
         alsoTarget:SetChecked(isSpell and binding.alsoTarget or false)

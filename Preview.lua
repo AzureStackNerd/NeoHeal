@@ -189,6 +189,8 @@ local function Decorate(frame, member)
     ShowFakeDebuffs(frame, ({ [4] = 1, [9] = 2 })[member % 11] or 0)   -- a few members carry boss debuffs
     NeoHeal.Hots.ShowPreview(frame, ({ [1] = 2, [2] = 1, [4] = 3 })[member % 5] or 0, member)
     ShowFakeDispel(frame, member % 6 == 3)
+    NeoHeal.MissingBuffs.ShowPreview(frame, member % 7 == 5)
+    frame.targetedBorder:SetShown(member == 3)   -- the boss is about to hit a healer (a druid)
     frame.aggro:SetShown(NeoHeal.db.layout.showAggro and member == 1)   -- the first tank has aggro
 end
 
@@ -236,6 +238,8 @@ local function DecoratePet(frame, pet)
     ShowFakeDebuffs(frame, 0)
     NeoHeal.Hots.ShowPreview(frame, 0, pet)
     ShowFakeDispel(frame, false)
+    NeoHeal.MissingBuffs.ShowPreview(frame, false)
+    frame.targetedBorder:Hide()
     frame.aggro:Hide()
 end
 

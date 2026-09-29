@@ -14,6 +14,7 @@ local DEFAULTS = {
         healthText = "percent",    -- "percent", "deficit" (health missing) or "none"
         powerBar = "all",          -- resource bar for "all", "healers" or "none"
         showRaidDebuffs = true,    -- debuffs Blizzard's raid frames show, such as boss debuffs
+        showMissingBuffs = true,   -- out of combat: members lacking your class's raid buff
         showHotTimers = true,      -- countdown numbers on HoT icons (the swipe always shows)
         healthColor = "class",     -- "class": class colours, "health": green to red by health
         frameStyle = "forever",    -- "forever": flat and dark, "classic": stone background, tooltip border
@@ -108,6 +109,7 @@ function NeoHeal:PLAYER_LOGIN()
 
     self.Spells:Scan()
     self.Dispel:UpdateKnownDispels()
+    self.MissingBuffs:UpdateKnownBuffs()
     self.ClickCast:Initialize()
     self:RunOutOfCombat("createFrames", function()
         self.Layout:Create()
@@ -122,7 +124,16 @@ function NeoHeal:PLAYER_REGEN_ENABLED()
         pendingActions[key] = nil
         func()
     end
-    -- Aura data is readable again: switch back from the Blizzard-drawn icons.
+    -- Aura data is readable again: switch back from the Blizzard-drawn icons, and
+    -- show missing buffs again.
+    self.MissingBuffs.inCombat = false
+    self.UnitButton:UpdateAllAuras()
+end
+
+-- Missing buffs are for buffing before a pull: they go away when combat starts.
+function NeoHeal:PLAYER_REGEN_DISABLED()
+    if not self.db then return end
+    self.MissingBuffs.inCombat = true
     self.UnitButton:UpdateAllAuras()
 end
 
@@ -154,6 +165,12 @@ function NeoHeal:RAID_TARGET_UPDATE()
 end
 
 function NeoHeal:PLAYER_TARGET_CHANGED()
+    self.UnitButton:UpdateTargetHighlights()
+end
+
+-- Your target picked another target (a boss switching to someone else): the red
+-- "targeted" border moves along. Registered for the "target" unit only.
+function NeoHeal:UNIT_TARGET()
     self.UnitButton:UpdateTargetHighlights()
 end
 
@@ -190,6 +207,7 @@ function NeoHeal:SPELLS_CHANGED()
         self.spellScanQueued = false
         self.Spells:Scan()
         self.Dispel:UpdateKnownDispels()
+        self.MissingBuffs:UpdateKnownBuffs()
         self.UnitButton:UpdateAllButtons()
         self.ClickCast:QueueApply()   -- "highest rank" bindings may now resolve to a new rank
         self:RunOutOfCombat("dispelContainers", function()
@@ -200,7 +218,8 @@ end
 
 local eventFrame = CreateFrame("Frame")
 eventFrame:SetScript("OnEvent", function(_, event, ...) NeoHeal[event](NeoHeal, ...) end)
-for _, event in ipairs({ "PLAYER_LOGIN", "PLAYER_REGEN_ENABLED", "GROUP_ROSTER_UPDATE", "SPELLS_CHANGED",
+eventFrame:RegisterUnitEvent("UNIT_TARGET", "target")
+for _, event in ipairs({ "PLAYER_LOGIN", "PLAYER_REGEN_ENABLED", "PLAYER_REGEN_DISABLED", "GROUP_ROSTER_UPDATE", "SPELLS_CHANGED",
                          "UNIT_PET", "RAID_TARGET_UPDATE", "PLAYER_TARGET_CHANGED", "PARTY_LEADER_CHANGED",
                          "READY_CHECK", "READY_CHECK_CONFIRM", "READY_CHECK_FINISHED", "PLAYER_ROLES_ASSIGNED" }) do
     -- Skip events this client doesn't know (registering one raises an error).
@@ -213,6 +232,9 @@ SLASH_NEOHEAL1 = "/neoheal"
 SlashCmdList.NEOHEAL = function(message)
     if message:lower():match("^%s*debug") then
         NeoHeal.Hots.PrintDebug()
+    elseif message:lower():match("^%s*clicks") then
+        NeoHeal.UnitButton.debugClicks = not NeoHeal.UnitButton.debugClicks
+        NeoHeal:Print("click debug " .. (NeoHeal.UnitButton.debugClicks and "on" or "off"))
     else
         NeoHeal.Options:Toggle()
     end

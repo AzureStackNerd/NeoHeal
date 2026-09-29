@@ -476,6 +476,7 @@ local function UpdateAuras(button)
     NeoHeal.AuraContainer.SetShown(button.raidDebuffContainer, NeoHeal.db.layout.showRaidDebuffs, button.unit)
     UpdateDispel(button)
     NeoHeal.Hots.Update(button)
+    NeoHeal.MissingBuffs.Update(button)
 end
 
 -- UNIT_AURA fires very often in raids, several times in a row for one unit. So an
@@ -544,8 +545,33 @@ local function UpdateRaidTarget(button)
 end
 
 -- A white border around the frame of your current target.
+-- A red border on whoever your hostile target is targeting: who the boss is about
+-- to hit, before any aggro shows. It shares the spot with the white border without
+-- clashing: while you target an enemy, no raid member is your target.
+--
+-- Both use UnitIsUnit, which the game may hide (secret) in combat. A secret answer
+-- can't be tested, but SetAlphaFromBoolean lets the game apply it to the border.
+local function ShowIfSameUnit(border, unit, otherUnit)
+    local same = UnitIsUnit(unit, otherUnit)
+    if IsSecret(same) and border.SetAlphaFromBoolean then
+        border:Show()
+        border:SetAlphaFromBoolean(same, 1, 0)
+    else
+        border:SetAlpha(1)
+        border:SetShown(IsTrue(same))
+    end
+end
+
 local function UpdateTargetHighlight(button)
-    button.targetBorder:SetShown(IsTrue(UnitIsUnit(button.unit, "target")))
+    local unit = button.unit
+    ShowIfSameUnit(button.targetBorder, unit, "target")
+    -- UnitCanAttack isn't secret. Only an enemy's target counts: a friendly
+    -- target's target would be anyone.
+    if IsTrue(UnitCanAttack("player", "target")) then
+        ShowIfSameUnit(button.targetedBorder, unit, "targettarget")
+    else
+        button.targetedBorder:Hide()
+    end
 end
 
 -- The top line: the name on the left, always at the same spot so names line up
@@ -783,6 +809,7 @@ function UnitButton.CreateVisuals(frame)
     LayoutBars(frame, true)
 
     NeoHeal.Hots.Attach(frame)   -- HoT icons at health level + 2
+    NeoHeal.MissingBuffs.Attach(frame)   -- in the third HoT slot
 
     local overlay = CreateFrame("Frame", nil, health)
     overlay:SetAllPoints()
@@ -855,6 +882,15 @@ function UnitButton.CreateVisuals(frame)
     targetBorder:Hide()
     frame.targetBorder = targetBorder
 
+    -- Targeted by your hostile target (UpdateTargetHighlight).
+    local targetedBorder = CreateFrame("Frame", nil, frame, "BackdropTemplate")
+    targetedBorder:SetAllPoints()
+    targetedBorder:SetFrameLevel(health:GetFrameLevel() + 4)
+    targetedBorder:SetBackdrop({ edgeFile = WHITE_TEXTURE, edgeSize = 2 })
+    targetedBorder:SetBackdropBorderColor(1, 0.1, 0.1, 1)
+    targetedBorder:Hide()
+    frame.targetedBorder = targetedBorder
+
     -- Test mode only: the real buttons get a game-drawn dispel strip
     -- (BuildDispelContainer), the preview frames this look-alike.
     local dispelStrip = CreateFrame("Frame", nil, frame)
@@ -886,9 +922,32 @@ local function OnLeave(button)
     if GameTooltip:IsOwned(button) then GameTooltip:Hide() end
 end
 
+-- /neoheal clicks: prints every click on a unit button (which mouse button arrived
+-- and what that button is bound to), to find out why a binding doesn't fire.
+UnitButton.debugClicks = false
+
+local CLICK_SUFFIXES = { LeftButton = "1", RightButton = "2", MiddleButton = "3" }
+
+function UnitButton.PrintClick(button, mouseButton)
+    if not UnitButton.debugClicks then return end
+    local prefix = (IsShiftKeyDown() and "shift-") or (IsControlKeyDown() and "ctrl-") or (IsAltKeyDown() and "alt-") or ""
+    local suffix = CLICK_SUFFIXES[mouseButton] or mouseButton:match("^Button(%d+)$") or ("-" .. mouseButton)
+    local actionType = button:GetAttribute(prefix .. "type" .. suffix)
+    NeoHeal:Print(format("click: %s%s on %s -> type = %s, spell = %s", prefix, tostring(mouseButton),
+        tostring(button.unit), tostring(actionType), tostring(button:GetAttribute(prefix .. "spell" .. suffix))))
+    if actionType == "neobuff" then
+        local buff = button.missingBuff
+        print(format("  buff to cast: %s, missing buff: %s, icon shown: %s", tostring(button:GetAttribute("*spell-neobuff")),
+            buff and C_Spell.GetSpellName(buff.spellID) or "none", tostring(button.missingBuffIcon:IsShown())))
+    end
+end
+
 function UnitButton.Init(button)
     UnitButton.CreateVisuals(button)
     button:HookScript("OnEnter", OnEnter)
+    button:HookScript("OnClick", UnitButton.PrintClick)   -- after the click; only prints with /neoheal clicks
+    -- PostClick also runs when the click snippet cancelled the click.
+    button:HookScript("PostClick", NeoHeal.MissingBuffs.ExplainClick)
     button:HookScript("OnLeave", OnLeave)
 
     -- Unit events go to a plain child frame, so no protected frame is touched in combat.
@@ -956,7 +1015,10 @@ end
 
 function UnitButton:UpdateStatusIcons()
     for button in pairs(self.buttons) do
-        if button.unit then UpdateStatusIcon(button) end
+        if button.unit then
+            UpdateStatusIcon(button)
+            NeoHeal.MissingBuffs.UpdateClick(button)   -- no buffing by click while ready check icons show
+        end
     end
 end
 
