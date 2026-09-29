@@ -284,7 +284,8 @@ function Preview:Show(size)
     end
 
     -- Each group starts a new column and wraps into further columns of five.
-    local width, height, spacing = settings.buttonWidth, settings.buttonHeight, settings.spacing
+    local size = NeoHeal.Layout:GetSize()   -- the test size picks the preset
+    local width, height, spacing = size.buttonWidth, size.buttonHeight, size.spacing
     local frameIndex, column = 0, 0
     local order = {}
     for _, group in ipairs(groups) do

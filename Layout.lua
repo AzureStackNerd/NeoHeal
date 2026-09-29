@@ -294,12 +294,29 @@ function Layout:SetTestMode(size)
     for _, header in ipairs(self:AllHeaders()) do
         header:SetShown(size == nil)
     end
-    if size then
-        self:FitToContent(NeoHeal.Preview:Show(size))   -- the preview's groups, and "is it a raid"
-    else
-        NeoHeal.Preview:Hide()
-        self:Refresh()
-    end
+    if not size then NeoHeal.Preview:Hide() end
+    self:Refresh()   -- the test size may pick the other size preset
+end
+
+---------------------------------------------------------------------------
+-- Size presets: button sizes, spacing, scale and position, one set for a party
+-- (and solo) and one for a raid. In test mode the test size picks it, so the
+-- options edit the preset being previewed.
+---------------------------------------------------------------------------
+function Layout:GetPresetName()
+    if self.testSize then return self.testSize > MAX_GROUP_SIZE and "raid" or "party" end
+    return IsInRaid() and "raid" or "party"
+end
+
+-- The preset in use. Switching happens in Refresh, out of combat: a raid formed in
+-- combat keeps the party sizes until combat ends, and so do the icons sized from it.
+function Layout:GetSize()
+    return NeoHeal.db.layout.sizes[self.appliedPreset or self:GetPresetName()]
+end
+
+-- True when the group changed between party and raid since the last Refresh.
+function Layout:PresetChanged()
+    return self.appliedPreset ~= self:GetPresetName()
 end
 
 ---------------------------------------------------------------------------
@@ -343,7 +360,15 @@ function Layout:Refresh()
     local settings = NeoHeal.db.layout
     local sortOrder = SORT_ORDERS[settings.sortOrder] or SORT_ORDERS.index
 
-    self:ApplyScale(settings.scale)
+    -- Another preset keeps its own position in its own scale: just switch to it.
+    -- Within one preset a new scale converts the position (ApplyScale).
+    local preset = self:GetPresetName()
+    if preset ~= self.appliedPreset then
+        self.appliedPreset = preset
+        self.container:SetScale(self:GetSize().scale)
+    end
+    local size = self:GetSize()
+    self:ApplyScale(size.scale)
     self:RestorePosition()
 
     -- In test mode only the preview follows the settings; the headers catch up later.
@@ -358,22 +383,22 @@ function Layout:Refresh()
         -- errors). Hidden, it lays out once, when shown again at the end.
         header:Hide()
         for _, button in ipairs({ header:GetChildren() }) do
-            button:SetSize(settings.buttonWidth, settings.buttonHeight)
+            button:SetSize(size.buttonWidth, size.buttonHeight)
         end
         local showsPlayerSolo = header == self.headers[1] or header == self.petHeader
-        header:SetAttribute("neoWidth", settings.buttonWidth)
-        header:SetAttribute("neoHeight", settings.buttonHeight)
+        header:SetAttribute("neoWidth", size.buttonWidth)
+        header:SetAttribute("neoHeight", size.buttonHeight)
         header:SetAttribute("showSolo", showsPlayerSolo and settings.showSolo)
         header:SetAttribute("point", "TOP")   -- members stack downwards
         header:SetAttribute("xOffset", 0)
-        header:SetAttribute("yOffset", -settings.spacing)
+        header:SetAttribute("yOffset", -size.spacing)
         header:SetAttribute("sortMethod", sortOrder.sortMethod)
         header:SetAttribute("groupBy", sortOrder.groupBy)
         header:SetAttribute("groupingOrder", sortOrder.groupingOrder)
         if header.isShown then
             -- Extra headers wrap into further columns of five, to the right.
             header:SetAttribute("columnAnchorPoint", "LEFT")
-            header:SetAttribute("columnSpacing", settings.spacing)
+            header:SetAttribute("columnSpacing", size.spacing)
             header:SetShown(header.isShown(settings))
         else
             header:Show()
@@ -401,7 +426,7 @@ end
 -- during combat, it appears at the end of the frames until combat ends.
 function Layout:Arrange()
     if not self.container or self.testSize then return end
-    local settings = NeoHeal.db.layout
+    local settings, size = NeoHeal.db.layout, self:GetSize()
     local memberCounts = GetGroupMemberCounts()
     local mainTankCount = CountMainTanks()
     local petCount = CountPets()
@@ -417,7 +442,7 @@ function Layout:Arrange()
     table.insert(order, { header = self.petHeader, count = petCount, label = L.PETS })
     if not mainTanksFirst then table.insert(order, mainTanks) end   -- "last" means after the pets too
 
-    local columnStep = settings.buttonWidth + settings.spacing
+    local columnStep = size.buttonWidth + size.spacing
     local column = 0
     for _, entry in ipairs(order) do
         entry.header:ClearAllPoints()
@@ -432,17 +457,17 @@ end
 -- `order` lists what is shown, in screen order: { count = units, label = title }.
 -- The real layout (Arrange) and the test mode preview both call this.
 function Layout:FitToContent(order, isRaid)
-    local settings = NeoHeal.db.layout
+    local size = self:GetSize()
     local columns, rows = 0, 0   -- columns in use, and the most units in one column
     for _, entry in ipairs(order) do
         columns = columns + ColumnsFor(entry.count)
         rows = math.max(rows, math.min(entry.count, MAX_GROUP_SIZE))
     end
 
-    local width = columns * settings.buttonWidth + math.max(columns - 1, 0) * settings.spacing
-    local height = rows * settings.buttonHeight + math.max(rows - 1, 0) * settings.spacing
+    local width = columns * size.buttonWidth + math.max(columns - 1, 0) * size.spacing
+    local height = rows * size.buttonHeight + math.max(rows - 1, 0) * size.spacing
     -- At least one button in size, so move mode has something to grab when no frames show.
-    self.container:SetSize(math.max(width, settings.buttonWidth), math.max(height, settings.buttonHeight))
+    self.container:SetSize(math.max(width, size.buttonWidth), math.max(height, size.buttonHeight))
 
     local showTitles = columns > 0
     local labelPerGroup = showTitles and isRaid
@@ -452,8 +477,8 @@ end
 
 -- One label above each group that has units, as wide as the group's columns.
 function Layout:PlaceGroupLabels(order)
-    local settings = NeoHeal.db.layout
-    local step = settings.buttonWidth + settings.spacing
+    local size = self:GetSize()
+    local step = size.buttonWidth + size.spacing
     local column, used = 0, 0
     for _, entry in ipairs(order) do
         local groupColumns = ColumnsFor(entry.count)
@@ -463,7 +488,7 @@ function Layout:PlaceGroupLabels(order)
             label.text:SetText(entry.label)
             label:ClearAllPoints()
             label:SetPoint("BOTTOMLEFT", self.container, "TOPLEFT", column * step, 2)
-            label:SetWidth(groupColumns * settings.buttonWidth + (groupColumns - 1) * settings.spacing)
+            label:SetWidth(groupColumns * size.buttonWidth + (groupColumns - 1) * size.spacing)
             label:Show()
             column = column + groupColumns
         end
@@ -474,20 +499,20 @@ function Layout:PlaceGroupLabels(order)
 end
 
 ---------------------------------------------------------------------------
--- Position. The frames are pinned by their top-left corner, so they only ever
--- grow to the right and down: group 1 stays where you put it, however many
--- groups (or main tanks, or pets) show up.
+-- Position, per size preset. The frames are pinned by their top-left corner, so
+-- they only ever grow to the right and down: group 1 stays where you put it,
+-- however many groups (or main tanks, or pets) show up.
 ---------------------------------------------------------------------------
 function Layout:SavePosition()
     local left, top = self.container:GetLeft(), self.container:GetTop()
     if not left or not top then return end
-    local position = NeoHeal.db.layout.position
+    local position = self:GetSize().position
     -- Relative to the screen's bottom-left, in the container's own (scaled) units.
     position.point, position.relativePoint, position.x, position.y = "TOPLEFT", "BOTTOMLEFT", left, top
 end
 
 function Layout:RestorePosition()
-    local position = NeoHeal.db.layout.position
+    local position = self:GetSize().position
     self.container:ClearAllPoints()
     self.container:SetPoint(position.point, UIParent, position.relativePoint, position.x, position.y)
     -- Positions saved before top-left pinning (and the default) are converted once.
@@ -505,7 +530,7 @@ end
 function Layout:ApplyScale(scale)
     local oldScale = self.container:GetScale()
     if oldScale == scale then return end
-    local position = NeoHeal.db.layout.position
+    local position = self:GetSize().position
     if position.point == "TOPLEFT" then
         position.x = position.x * oldScale / scale
         position.y = position.y * oldScale / scale

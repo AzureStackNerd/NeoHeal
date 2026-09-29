@@ -452,7 +452,7 @@ UnitButton.RAID_DEBUFF_TOP = 14 -- pixels from the top of the health bar: just b
 function UnitButton.GetRaidDebuffSize()
     local settings = NeoHeal.db.layout
     local style = FRAME_STYLES[settings.frameStyle] or FRAME_STYLES.forever
-    local healthHeight = settings.buttonHeight - 2 * style.inset
+    local healthHeight = NeoHeal.Layout:GetSize().buttonHeight - 2 * style.inset
     if settings.powerBar ~= "none" then healthHeight = healthHeight - POWER_BAR_HEIGHT - 1 end
     local room = healthHeight - UnitButton.RAID_DEBUFF_TOP - 1
     return math.max(8, math.min(math.floor(NeoHeal.Hots.GetIconSize() * RAID_DEBUFF_SCALE), room))

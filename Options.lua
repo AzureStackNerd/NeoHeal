@@ -110,6 +110,32 @@ local function GetTestMode() return NeoHeal.Layout.testSize or 0 end
 local function SetTestMode(size)
     if InCombatLockdown() then return end
     NeoHeal.Layout:SetTestMode(size > 0 and size or nil)
+    Options:RefreshLayoutPage()   -- the test size may pick the other size preset
+end
+
+-- Sizes are kept per preset (party / raid, Layout:GetPresetName); the sliders edit
+-- the one in use, which test mode picks: 5 players is Party, 10 or more is Raid.
+local function GetSizeSetting(key) return NeoHeal.Layout:GetSize()[key] end
+local function SetSizeSetting(key, value)
+    local size = NeoHeal.Layout:GetSize()
+    if size[key] == value then return end
+    size[key] = value
+    NeoHeal:RunOutOfCombat("layout", function() NeoHeal.Layout:Refresh() end)
+end
+
+-- "Sizes for: Party" above the sliders.
+local function CreatePresetLabel(page)
+    local holder = CreateFrame("Frame", nil, page)
+    holder:SetSize(300, 20)
+    local label = CreateLabel(holder, "", "GameFontNormal")
+    label:SetPoint("LEFT")
+    local hint = CreateLabel(holder, L.SIZES_HINT, "GameFontDisableSmall")
+    hint:SetPoint("LEFT", label, "RIGHT", 8, 0)
+    function holder:Refresh()
+        local preset = NeoHeal.Layout:GetPresetName()
+        label:SetText(format(L.SIZES_FOR, preset == "raid" and L.PRESET_RAID or L.PRESET_PARTY))
+    end
+    return holder
 end
 
 -- The whole Layout page is described here; add a line to add a setting.
@@ -151,10 +177,11 @@ local LAYOUT_SETTINGS = {
         { value = 25, label = format(L.TEST_MODE_SIZE, 25) },
         { value = 40, label = format(L.TEST_MODE_SIZE, 40) },
     } },
-    { kind = "slider",   key = "buttonWidth",        label = L.BUTTON_WIDTH,  min = 40,  max = 160, step = 1 },
-    { kind = "slider",   key = "buttonHeight",       label = L.BUTTON_HEIGHT, min = 24,  max = 80,  step = 1 },
-    { kind = "slider",   key = "spacing",            label = L.SPACING,       min = 0,   max = 10,  step = 1 },
-    { kind = "slider",   key = "scale",              label = L.SCALE,         min = 0.5, max = 2,   step = 0.05 },
+    { kind = "presetLabel" },
+    { kind = "slider",   key = "buttonWidth",  size = true, label = L.BUTTON_WIDTH,  min = 40,  max = 160, step = 1 },
+    { kind = "slider",   key = "buttonHeight", size = true, label = L.BUTTON_HEIGHT, min = 24,  max = 80,  step = 1 },
+    { kind = "slider",   key = "spacing",      size = true, label = L.SPACING,       min = 0,   max = 10,  step = 1 },
+    { kind = "slider",   key = "scale",        size = true, label = L.SCALE,         min = 0.5, max = 2,   step = 0.05 },
     { kind = "checkbox", key = "showSolo",           label = L.SHOW_SOLO },
     { kind = "checkbox", key = "showRaidDebuffs",    label = L.SHOW_RAID_DEBUFFS },
     { kind = "checkbox", key = "showMissingBuffs",   label = L.SHOW_MISSING_BUFFS },
@@ -170,6 +197,7 @@ local WIDGET_BUILDERS = {
     choice = function(page, setting, get, set) return CreateChoice(page, setting.label, setting.choices, get, set) end,
     slider = function(page, setting, get, set) return CreateSlider(page, setting.label, setting.min, setting.max, setting.step, get, set) end,
     checkbox = function(page, setting, get, set) return CreateCheckbox(page, setting.label, get, set) end,
+    presetLabel = function(page) return CreatePresetLabel(page) end,
 }
 
 local function SetLayoutSetting(key, value)
@@ -183,8 +211,13 @@ local function CreateLayoutPage(frame)
     local page = CreatePage(frame)
     local leftY, rightY = 0, 0
     for _, setting in ipairs(LAYOUT_SETTINGS) do
-        local get = setting.get or function() return NeoHeal.db.layout[setting.key] end
-        local set = setting.set or function(value) SetLayoutSetting(setting.key, value) end
+        local get, set = setting.get, setting.set
+        if setting.size then
+            get = function() return GetSizeSetting(setting.key) end
+            set = function(value) SetSizeSetting(setting.key, value) end
+        end
+        get = get or function() return NeoHeal.db.layout[setting.key] end
+        set = set or function(value) SetLayoutSetting(setting.key, value) end
         local widget = WIDGET_BUILDERS[setting.kind](page, setting, get, set)
         if setting.kind == "checkbox" then
             widget:SetPoint("TOPLEFT", SECOND_COLUMN_X, rightY)
@@ -195,7 +228,14 @@ local function CreateLayoutPage(frame)
         end
         table.insert(page.widgets, widget)
     end
+    Options.layoutPage = page
     return page
+end
+
+-- After the size preset changed (test mode, or joining / leaving a raid): the
+-- sliders show the other preset's values.
+function Options:RefreshLayoutPage()
+    if self.layoutPage and self.layoutPage:IsVisible() then self.layoutPage:Refresh() end
 end
 
 -- The action menu: None / Target / Menu, then spells grouped by spellbook tab.
@@ -422,7 +462,7 @@ end
 
 function Options:Create()
     local frame = CreateFrame("Frame", "NeoHealOptionsFrame", UIParent, "BasicFrameTemplateWithInset")
-    frame:SetSize(660, 500)
+    frame:SetSize(660, 540)   -- room for the Layout page's left column
     frame:SetPoint("CENTER")
     frame:SetFrameStrata("DIALOG")
     frame:SetClampedToScreen(true)

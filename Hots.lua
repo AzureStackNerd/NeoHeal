@@ -51,7 +51,7 @@ local function ClassHasHots()
 end
 
 function Hots.GetIconSize()
-    return math.max(10, math.min(20, math.floor(NeoHeal.db.layout.buttonHeight * 0.4)))
+    return math.max(10, math.min(20, math.floor(NeoHeal.Layout:GetSize().buttonHeight * 0.4)))
 end
 
 ---------------------------------------------------------------------------

@@ -6,10 +6,14 @@ local L = NeoHeal.L
 -- Account-wide settings (NeoHealDB). Click bindings are per character (NeoHealCharDB).
 local DEFAULTS = {
     layout = {
-        buttonWidth = 80,
-        buttonHeight = 36,
-        spacing = 2,
-        scale = 1,
+        -- Sizes and position per group size (Layout:GetPresetName): "party" solo and
+        -- in a party, "raid" in a raid. Everything else is shared.
+        sizes = {
+            party = { buttonWidth = 110, buttonHeight = 44, spacing = 2, scale = 1,
+                      position = { point = "CENTER", relativePoint = "CENTER", x = -350, y = 100 } },
+            raid  = { buttonWidth = 80, buttonHeight = 36, spacing = 2, scale = 1,
+                      position = { point = "CENTER", relativePoint = "CENTER", x = -350, y = 100 } },
+        },
         showSolo = true,
         healthText = "percent",    -- "percent", "deficit" (health missing) or "none"
         powerBar = "all",          -- resource bar for "all", "healers" or "none"
@@ -25,7 +29,6 @@ local DEFAULTS = {
         mainTankPosition = "none",   -- "none", "first" (before group 1) or "last" (after the groups)
         hideBlizzardFrames = false,
         sortOrder = "index",       -- "index", "name", "role" or "class"
-        position = { point = "CENTER", relativePoint = "CENTER", x = -350, y = 100 },
     },
 }
 
@@ -102,6 +105,17 @@ function NeoHeal:PLAYER_LOGIN()
         if not layout.showHealthText then layout.healthText = "none" end
         layout.showHealthText = nil
     end
+    -- Sizes and position used to be one set; both presets start from it, so
+    -- nothing moves or changes size on the first login with presets.
+    if layout.buttonWidth ~= nil then
+        for _, size in pairs(layout.sizes) do
+            for _, key in ipairs({ "buttonWidth", "buttonHeight", "spacing", "scale" }) do
+                if layout[key] ~= nil then size[key] = layout[key] end
+            end
+            if type(layout.position) == "table" then size.position = CopyTable(layout.position) end
+        end
+        layout.buttonWidth, layout.buttonHeight, layout.spacing, layout.scale, layout.position = nil, nil, nil, nil, nil
+    end
     layout.orientation = nil    -- groups are always columns now
     layout.showTitleBar = nil   -- the title bar is always shown now
     self.db = NeoHealDB
@@ -142,7 +156,12 @@ function NeoHeal:GROUP_ROSTER_UPDATE()
     -- A unit token such as "raid7" may now belong to someone else.
     self.UnitButton:UpdateAllButtons()
     self:RunOutOfCombat("arrange", function()
-        self.Layout:Arrange()
+        if self.Layout:PresetChanged() then
+            self.Layout:Refresh()   -- party <-> raid: the other size preset (Refresh arranges too)
+            self.Options:RefreshLayoutPage()
+        else
+            self.Layout:Arrange()
+        end
         self.Blizzard:ApplyHiding()   -- Blizzard creates some group frames only when needed
     end)
 end
