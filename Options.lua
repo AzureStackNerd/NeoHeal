@@ -134,6 +134,11 @@ local LAYOUT_SETTINGS = {
         { value = "first", label = L.MAIN_TANKS_FIRST },
         { value = "last",  label = L.MAIN_TANKS_LAST },
     } },
+    { kind = "choice", key = "healthText", label = L.HEALTH_TEXT, choices = {
+        { value = "percent", label = L.HEALTH_TEXT_PERCENT },
+        { value = "deficit", label = L.HEALTH_TEXT_DEFICIT },
+        { value = "none",    label = L.HEALTH_TEXT_NONE },
+    } },
     { kind = "choice", key = "powerBar", label = L.POWER_BAR, choices = {
         { value = "all",     label = L.POWER_BAR_ALL },
         { value = "healers", label = L.POWER_BAR_HEALERS },
@@ -151,7 +156,7 @@ local LAYOUT_SETTINGS = {
     { kind = "slider",   key = "spacing",            label = L.SPACING,       min = 0,   max = 10,  step = 1 },
     { kind = "slider",   key = "scale",              label = L.SCALE,         min = 0.5, max = 2,   step = 0.05 },
     { kind = "checkbox", key = "showSolo",           label = L.SHOW_SOLO },
-    { kind = "checkbox", key = "showHealthText",     label = L.SHOW_HEALTH_TEXT },
+    { kind = "checkbox", key = "showRaidDebuffs",    label = L.SHOW_RAID_DEBUFFS },
     { kind = "checkbox", key = "showHotTimers",      label = L.SHOW_HOT_TIMERS },
     { kind = "checkbox", key = "showIncomingHeals",  label = L.SHOW_INCOMING_HEALS },
     { kind = "checkbox", key = "showAggro",          label = L.SHOW_AGGRO },

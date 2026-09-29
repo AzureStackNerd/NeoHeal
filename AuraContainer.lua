@@ -92,7 +92,8 @@ end
 -- Builds a hidden container on `parent` (out of combat only). Returns it, or nil
 -- if this client can't. options:
 --   filter      aura filter, e.g. "HELPFUL|PLAYER"
---   corner      "BOTTOMRIGHT" (icons grow to the left) or "BOTTOM" (grow to the right)
+--   corner      "BOTTOMRIGHT" (icons grow to the left), "BOTTOM" or "TOP" (grow to the right)
+--   offsetY     optional: vertical offset from that point (default 1)
 --   maxIcons, size
 --   maxDuration optional: only auras whose *total* duration is at most this (seconds)
 --   timed       true: countdown numbers follow the "Show HoT timers" setting; else none
@@ -104,7 +105,7 @@ function AuraContainer.Create(parent, unit, options)
     local size = options.size
     local built = pcall(function()
         local growLeft = options.corner == "BOTTOMRIGHT"
-        container:SetPoint(options.corner, parent, options.corner, growLeft and -1 or 0, 1)
+        container:SetPoint(options.corner, parent, options.corner, growLeft and -1 or 0, options.offsetY or 1)
         if container.SetFlowLayoutAnchorPoint then container:SetFlowLayoutAnchorPoint(options.corner) end
         local flow = AnchorUtil and AnchorUtil.FlowDirection
         if container.SetFlowLayoutGrowthDirection and flow then
@@ -129,6 +130,68 @@ function AuraContainer.Create(parent, unit, options)
     container.neoUnit = unit
     container.neoSize = size
     return container
+end
+
+-- A strip along the left edge of `frame` in the colour of a debuff you can dispel,
+-- drawn by the game in and out of combat (technique as in Decursive's micro unit
+-- frames). One aura slot covers the frame; the game colours the strip with `curve`
+-- by the debuff's dispel type, and `filters` decide which debuffs count
+-- (Dispel.lua). Out of combat only, like every container.
+local DISPEL_SLOT = "NeoHealDispel"
+
+local function MakeStripInit(frame, level, curve, width)
+    return function(auraButton)
+        pcall(function()
+            if auraButton.SetMouseClickEnabled then auraButton:SetMouseClickEnabled(false) end
+            if auraButton.SetMouseMotionEnabled then auraButton:SetMouseMotionEnabled(false) end
+            auraButton:ClearAllPoints()
+            auraButton:SetAllPoints(frame)
+            auraButton:SetFrameLevel(level)
+            if auraButton.neoStrip then return end
+
+            local strip = auraButton:CreateTexture(nil, "OVERLAY")
+            strip:SetColorTexture(1, 1, 1, 1)   -- the game tints it
+            strip:SetPoint("TOPLEFT")
+            strip:SetPoint("BOTTOMLEFT")
+            strip:SetWidth(width)
+            auraButton:ClearDispelTypeTextures()
+            auraButton:AddDispelTypeTexture(strip, {
+                showIcon = false, showWhenHarmful = true, showWhenHelpful = false, showWithoutDispelType = false,
+                style = Enum.CustomAuraButtonDispelTypeTextureStyle.PreserveAsset,
+                customDispelColorCurve = curve,
+            })
+            auraButton.neoStrip = strip
+        end)
+    end
+end
+
+function AuraContainer.CreateDispelStrip(frame, unit, level, filters, curve, width)
+    if InCombatLockdown() or not curve or not AuraContainer.IsSupported() then return nil end
+    local ok, container = pcall(CreateFrame, "AuraContainer", nil, frame, "CustomAuraContainerTemplate")
+    if not ok or not container then return nil end
+
+    local built = pcall(function()
+        container:SetAllPoints(frame)
+        container:SetFrameLevel(level)
+        if container.SetMouseClickEnabled then container:SetMouseClickEnabled(false) end
+        if container.SetMouseMotionEnabled then container:SetMouseMotionEnabled(false) end
+        container:SetUnit(unit)
+        container:AddAuraSlot(DISPEL_SLOT, "HARMFUL", {
+            sortMethod = 0, sortDirection = 0,
+            candidateFilters = filters,
+            initializeFrame = MakeStripInit(frame, level, curve, width),
+        })
+        container:SetEnabled(true)
+    end)
+    container:Hide()
+    if not built then return nil end
+    container.neoUnit = unit
+    return container
+end
+
+-- After learning a cure spell: which dispel types the strip shows.
+function AuraContainer.SetDispelFilters(container, filters)
+    if container then pcall(container.SetAuraSlotCandidateFilters, container, DISPEL_SLOT, filters) end
 end
 
 -- Points a container at another unit. If the game refuses, it stays hidden.

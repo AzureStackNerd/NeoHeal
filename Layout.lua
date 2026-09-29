@@ -382,7 +382,7 @@ function Layout:Refresh()
 
     self:Arrange()
     NeoHeal.Hots.RefreshSizes()
-    NeoHeal.UnitButton:RefreshDispelContainers()
+    NeoHeal.UnitButton:RefreshAuraContainers()
     NeoHeal.Blizzard:ApplyHiding()
     NeoHeal.UnitButton:UpdateAllButtons()
 end

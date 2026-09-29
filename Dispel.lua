@@ -1,7 +1,9 @@
--- Which debuff types the player can remove, and whether a unit has one of them.
+-- Which debuff types the player can remove, and what the game needs to draw the
+-- dispel border (UnitButton.lua) itself. Addons can't read debuffs in combat, so
+-- NeoHeal never looks: a candidate filter tells the game which dispel types count,
+-- and a colour curve which colour each type gets. (Technique as in Decursive.)
 -- It works for every class: whatever cure spells the character knows decide it.
 local _, NeoHeal = ...
-local IsSecret = NeoHeal.IsSecret
 
 local Dispel = {
     known = {},   -- [debuffType] = true, e.g. known.Magic
@@ -30,8 +32,39 @@ Dispel.COLORS = {
     Poison  = { 0.00, 0.60, 0.00 },
 }
 
--- For the Blizzard-drawn icon in combat: debuffs *this player* can dispel.
-Dispel.COMBAT_FILTER = "HARMFUL|RAID_PLAYER_DISPELLABLE"
+-- The game's number for each dispel type: the input of the colour curve.
+local DISPEL_TYPE_NUMBERS = { Magic = 1, Curse = 2, Disease = 3, Poison = 4 }
+
+-- Maps a debuff's dispel type to its colour; types you can't dispel stay invisible.
+-- Updated in place when you learn a cure spell, so existing borders follow.
+local colorCurve
+
+function Dispel:GetColorCurve()
+    if not colorCurve and C_CurveUtil and C_CurveUtil.CreateColorCurve then
+        colorCurve = C_CurveUtil.CreateColorCurve()
+        colorCurve:SetType(Enum.LuaCurveType.Step)
+        self:UpdateColorCurve()
+    end
+    return colorCurve
+end
+
+function Dispel:UpdateColorCurve()
+    if not colorCurve then return end
+    colorCurve:ClearPoints()
+    colorCurve:AddPoint(0, CreateColor(0, 0, 0, 0))   -- no dispel type
+    for debuffType, number in pairs(DISPEL_TYPE_NUMBERS) do
+        local color = self.COLORS[debuffType]
+        colorCurve:AddPoint(number, self.known[debuffType] and CreateColor(color[1], color[2], color[3], 1)
+            or CreateColor(0, 0, 0, 0))
+    end
+end
+
+-- Candidate filters for the dispel border: only debuffs of a type you can remove.
+function Dispel:GetBorderFilters()
+    local types = {}
+    for debuffType in pairs(self.known) do types[debuffType] = true end
+    return { includeDispelTypes = types }
+end
 
 function Dispel:CanDispelAnything()
     return next(self.known) ~= nil
@@ -46,24 +79,5 @@ function Dispel:UpdateKnownDispels()
             end
         end
     end
-end
-
--- Returns the debuff type to highlight on `unit` ("Magic", ...) or nil, and as a
--- second value true when the game is hiding aura data (in combat on Forever),
--- so the caller can fall back to Blizzard-drawn icons.
-function Dispel:FindDispellable(unit)
-    if not self:CanDispelAnything() then return nil, false end
-
-    for index = 1, 40 do
-        -- In combat the game refuses (throws) or hides the data; both mean "can't read".
-        local ok, aura = pcall(C_UnitAuras.GetAuraDataByIndex, unit, index, "HARMFUL")
-        if not ok or IsSecret(aura) or (aura and IsSecret(aura.dispelName)) then
-            return nil, true
-        end
-        if not aura then return nil, false end
-        if aura.dispelName and self.known[aura.dispelName] then
-            return aura.dispelName, false
-        end
-    end
-    return nil, false
+    self:UpdateColorCurve()
 end

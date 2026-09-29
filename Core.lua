@@ -11,8 +11,9 @@ local DEFAULTS = {
         spacing = 2,
         scale = 1,
         showSolo = true,
-        showHealthText = true,
+        healthText = "percent",    -- "percent", "deficit" (health missing) or "none"
         powerBar = "all",          -- resource bar for "all", "healers" or "none"
+        showRaidDebuffs = true,    -- debuffs Blizzard's raid frames show, such as boss debuffs
         showHotTimers = true,      -- countdown numbers on HoT icons (the swipe always shows)
         healthColor = "class",     -- "class": class colours, "health": green to red by health
         frameStyle = "forever",    -- "forever": flat and dark, "classic": stone background, tooltip border
@@ -94,6 +95,11 @@ function NeoHeal:PLAYER_LOGIN()
     if layout.showPowerBar ~= nil then
         if not layout.showPowerBar then layout.powerBar = "none" end
         layout.showPowerBar = nil
+    end
+    -- "Show health percentage" used to be a toggle; off is now the "none" choice.
+    if layout.showHealthText ~= nil then
+        if not layout.showHealthText then layout.healthText = "none" end
+        layout.showHealthText = nil
     end
     layout.orientation = nil    -- groups are always columns now
     layout.showTitleBar = nil   -- the title bar is always shown now
@@ -187,7 +193,7 @@ function NeoHeal:SPELLS_CHANGED()
         self.UnitButton:UpdateAllButtons()
         self.ClickCast:QueueApply()   -- "highest rank" bindings may now resolve to a new rank
         self:RunOutOfCombat("dispelContainers", function()
-            self.UnitButton:RefreshDispelContainers()   -- a first dispel spell may be learned
+            self.UnitButton:RefreshAuraContainers()   -- a first dispel spell may be learned
         end)
     end)
 end

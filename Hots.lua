@@ -172,6 +172,30 @@ function Hots.Update(button)
     end
 end
 
+-- Test mode: `count` fake HoTs with running timers on a preview frame. Your own
+-- class's HoTs, or the priest's for classes without any. The one that runs out
+-- first sits on the right, as on the real frames; `seed` varies the timers. Each
+-- HoT shows at most once: your own cast of a HoT replaces the one already running.
+local PREVIEW_DURATION = 30
+
+function Hots.ShowPreview(frame, count, seed)
+    LayoutIcons(frame)
+    local _, class = UnitClass("player")
+    local spells = HOT_SPELLS[class] or HOT_SPELLS.PRIEST
+    count = math.min(count, #spells)
+    local now = GetTime()
+    for index, icon in ipairs(frame.hotIcons) do
+        if index <= count then
+            local remaining = 4 + index * 7 + seed % 5
+            icon.texture:SetTexture(C_Spell.GetSpellTexture(spells[index]))
+            icon.cooldown:SetCooldown(now - (PREVIEW_DURATION - remaining), PREVIEW_DURATION)
+            icon:Show()
+        else
+            icon:Hide()
+        end
+    end
+end
+
 -- After a layout change (out of combat): containers can't be resized, so one with
 -- the old size is dropped and a new one built. Timers follow "Show HoT timers".
 function Hots.RefreshSizes()

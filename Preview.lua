@@ -105,6 +105,62 @@ local function SetLeaderIcon(frame, texture)
     frame.nameText:SetPoint("TOPLEFT", texture and 14 or 3, -3)
 end
 
+-- Fake maximum health, for "Health text: Health missing".
+local FAKE_MAX_HEALTH = { WARRIOR = 5500 }
+local DEFAULT_FAKE_MAX_HEALTH = 3800
+local PET_MAX_HEALTH = 2500
+
+-- Fake raid debuffs below the name, like the Blizzard-drawn ones on the real frames.
+local FAKE_DEBUFF_ICONS = { "Interface\\Icons\\Spell_Fire_Immolation", "Interface\\Icons\\Spell_Shadow_ShadowWordPain" }
+
+local function ShowFakeDebuffs(frame, count)
+    local holder = frame.fakeDebuffs
+    if not holder then
+        holder = CreateFrame("Frame", nil, frame.health)
+        holder:SetFrameLevel(frame.health:GetFrameLevel() + 2)
+        holder:SetPoint("TOP", 0, -NeoHeal.UnitButton.RAID_DEBUFF_TOP)
+        holder.icons = {}
+        for index, file in ipairs(FAKE_DEBUFF_ICONS) do
+            local icon = holder:CreateTexture(nil, "ARTWORK")
+            icon:SetTexture(file)
+            icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+            holder.icons[index] = icon
+        end
+        frame.fakeDebuffs = holder
+    end
+    if not NeoHeal.db.layout.showRaidDebuffs or count == 0 then
+        holder:Hide()
+        return
+    end
+    local size = NeoHeal.UnitButton.GetRaidDebuffSize()
+    holder:SetSize(count * (size + 1) - 1, size)
+    for index, icon in ipairs(holder.icons) do
+        icon:SetSize(size, size)
+        icon:SetPoint("LEFT", (index - 1) * (size + 1), 0)
+        icon:SetShown(index <= count)
+    end
+    holder:Show()
+end
+
+-- A fake dispel strip in the colour of a debuff type you can remove (none for
+-- classes without a cure spell).
+local DISPEL_TYPE_ORDER = { "Poison", "Magic", "Curse", "Disease" }
+
+local function ShowFakeDispel(frame, show)
+    local Dispel = NeoHeal.Dispel
+    local debuffType
+    for _, candidate in ipairs(DISPEL_TYPE_ORDER) do
+        if Dispel.known[candidate] then debuffType = candidate break end
+    end
+    if show and debuffType then
+        local color = Dispel.COLORS[debuffType]
+        frame.dispelStrip.texture:SetVertexColor(color[1], color[2], color[3])
+        frame.dispelStrip:Show()
+    else
+        frame.dispelStrip:Hide()
+    end
+end
+
 -- Fills a frame with believable fake data. The same member always looks the same,
 -- so a main tank looks identical in the main tank group and in their own group.
 local function Decorate(frame, member)
@@ -124,7 +180,10 @@ local function Decorate(frame, member)
     frame.absorb:SetShown(member % 7 == 1)
     frame.power:SetStatusBarColor(powerColor.r, powerColor.g, powerColor.b)
     frame.power:SetValue(0.3 + ((member * 53) % 70) / 100)
-    frame.statusText:SetText(NeoHeal.db.layout.showHealthText and format("%d%%", healthFraction * 100) or "")
+    NeoHeal.UnitButton.ShowHealthText(frame, healthFraction, FAKE_MAX_HEALTH[class] or DEFAULT_FAKE_MAX_HEALTH)
+    ShowFakeDebuffs(frame, ({ [4] = 1, [9] = 2 })[member % 11] or 0)   -- a few members carry boss debuffs
+    NeoHeal.Hots.ShowPreview(frame, ({ [1] = 2, [2] = 1, [4] = 3 })[member % 5] or 0, member)
+    ShowFakeDispel(frame, member % 6 == 3)
     frame.aggro:SetShown(NeoHeal.db.layout.showAggro and member == 1)   -- the first tank has aggro
 end
 
@@ -167,7 +226,10 @@ local function DecoratePet(frame, pet)
     frame.absorb:Hide()
     frame.power:SetStatusBarColor(powerColor.r, powerColor.g, powerColor.b)
     frame.power:SetValue(0.5 + ((pet * 17) % 50) / 100)
-    frame.statusText:SetText(NeoHeal.db.layout.showHealthText and format("%d%%", healthFraction * 100) or "")
+    NeoHeal.UnitButton.ShowHealthText(frame, healthFraction, PET_MAX_HEALTH)
+    ShowFakeDebuffs(frame, 0)
+    NeoHeal.Hots.ShowPreview(frame, 0, pet)
+    ShowFakeDispel(frame, false)
     frame.aggro:Hide()
 end
 
@@ -178,6 +240,9 @@ end
 function Preview:Show(size)
     local settings = NeoHeal.db.layout
     local L = NeoHeal.L
+    -- In test mode Layout:Refresh stops before the HoT refresh, so "Show HoT timers"
+    -- and the countdown font size are applied here.
+    NeoHeal.AuraContainer.ApplyTimerSetting()
 
     -- Groups in screen order: { members = { ids }, label = title, decorate = function }.
     local groups = {}

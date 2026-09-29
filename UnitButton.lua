@@ -160,6 +160,60 @@ function UnitButton.ShowLowHealth(frame, fraction)
     frame.lowHealth:Show()
 end
 
+-- "Health text": the percentage, or the deficit (health missing, e.g. "-2340"),
+-- which is what Classic healers pick a spell rank by. Nothing shows at full
+-- health; in combat the deficit is secret and can't be compared with 0, so a
+-- colour curve fades the text out at 100% instead.
+local HEALTH_TEXT_COLOR = { 0.85, 0.85, 0.85 }
+local deficitCurve
+
+-- For readable values (also used by the test mode preview).
+function UnitButton.ShowHealthText(frame, fraction, maxHealth)
+    local text, mode = frame.statusText, NeoHeal.db.layout.healthText
+    text:SetTextColor(unpack(HEALTH_TEXT_COLOR))
+    if mode == "percent" then
+        text:SetText(format("%d%%", fraction * 100))
+    elseif mode == "deficit" and fraction < 1 then
+        text:SetText(format("-%d", (1 - fraction) * maxHealth))
+    else
+        text:SetText("")
+    end
+end
+
+local function UpdateHealthText(button)
+    local text, unit, mode = button.statusText, button.unit, NeoHeal.db.layout.healthText
+    text:SetTextColor(unpack(HEALTH_TEXT_COLOR))
+    if mode == "percent" then
+        text:SetText(format("%d%%", GetHealthPercent(unit)))
+        return
+    elseif mode ~= "deficit" then
+        text:SetText("")
+        return
+    end
+
+    local missing = UnitHealthMissing and UnitHealthMissing(unit, true)
+    if not UnitHealthMissing or not IsSecret(missing) then
+        missing = missing or (UnitHealthMax(unit) - UnitHealth(unit))
+        text:SetText(missing > 0 and format("-%d", missing) or "")
+        return
+    end
+    text:SetText(format("-%d", missing))
+    if C_CurveUtil and C_CurveUtil.CreateColorCurve then
+        if not deficitCurve then
+            local r, g, b = unpack(HEALTH_TEXT_COLOR)
+            deficitCurve = C_CurveUtil.CreateColorCurve()
+            deficitCurve:SetType(Enum.LuaCurveType.Linear)
+            deficitCurve:AddPoint(0, CreateColor(r, g, b, 1))
+            deficitCurve:AddPoint(0.999, CreateColor(r, g, b, 1))
+            deficitCurve:AddPoint(1, CreateColor(r, g, b, 0))
+        end
+        -- Should this client refuse, "-0" shows at full health: harmless.
+        pcall(function()
+            text:SetTextColor(UnitHealthPercent(unit, true, deficitCurve):GetRGBA())
+        end)
+    end
+end
+
 local function UpdateLowHealth(button, isDeadOrOffline)
     local tint, unit = button.lowHealth, button.unit
     if isDeadOrOffline then
@@ -197,17 +251,14 @@ local function UpdateHealth(button)
 
     if status then
         button.health:SetValue(0)
+        button.statusText:SetTextColor(unpack(HEALTH_TEXT_COLOR))
         button.statusText:SetText(status)
     else
         button.health:SetValue(GetHealthFraction(unit))
         if ColorByHealth() then
             button.health:SetStatusBarColor(GetHealthColor(unit))
         end
-        if NeoHeal.db.layout.showHealthText then
-            button.statusText:SetText(format("%d%%", GetHealthPercent(unit)))
-        else
-            button.statusText:SetText("")
-        end
+        UpdateHealthText(button)
     end
     UpdateLowHealth(button, status ~= nil)
     UpdateIncomingHeals(button)
@@ -361,35 +412,68 @@ local function UpdateRange(button)
     button.content:SetAlpha((checked and not inRange) and OUT_OF_RANGE_ALPHA or 1)
 end
 
--- Out of combat: a border in the debuff type's colour. In combat the game hides
--- the debuffs from addons, so Blizzard draws the icon of a debuff you can dispel
--- (bottom centre) instead; its type colour can't be known then.
+-- A debuff you can dispel: a strip along the left edge in its type's colour (Magic
+-- blue, Curse purple, Disease brown, Poison green). Drawn by the game, so also in
+-- combat. A strip rather than a border, so it never hides the target border.
+local DISPEL_STRIP_WIDTH = 5
+
 local function UpdateDispel(button)
-    local debuffType, hidden = NeoHeal.Dispel:FindDispellable(button.unit)
-    if debuffType then
-        local color = NeoHeal.Dispel.COLORS[debuffType]
-        button.dispelBorder:SetBackdropBorderColor(color[1], color[2], color[3])
-        button.dispelBorder:Show()
-    else
-        button.dispelBorder:Hide()
+    NeoHeal.AuraContainer.SetShown(button.dispelContainer, true, button.unit)
+end
+
+-- Out of combat only. After learning a cure spell, an existing border follows the
+-- new dispel types.
+local function BuildDispelContainer(button)
+    local Dispel = NeoHeal.Dispel
+    if not button.unit or not Dispel:CanDispelAnything() then return end
+    if button.dispelContainer then
+        NeoHeal.AuraContainer.SetDispelFilters(button.dispelContainer, Dispel:GetBorderFilters())
+        return
     end
-    NeoHeal.AuraContainer.SetShown(button.dispelContainer, hidden, button.unit)
+    -- Above the target border: a dispellable debuff matters more.
+    button.dispelContainer = NeoHeal.AuraContainer.CreateDispelStrip(button, button.unit,
+        button.health:GetFrameLevel() + 5, Dispel:GetBorderFilters(), Dispel:GetColorCurve(), DISPEL_STRIP_WIDTH)
+end
+
+-- Raid debuffs: debuffs that matter to a healer, such as boss debuffs. Up to two,
+-- in the centre and larger than the HoT icons. Always Blizzard-drawn, so they look
+-- the same in and out of combat. The filter keeps out (a "!" negates a part):
+--   RAID    debuffs you can dispel: HARMFUL|RAID means exactly that, and the
+--           dispel border already shows those;
+--   PLAYER  debuffs you caused yourself, such as Weakened Soul from your shields.
+-- Boss debuffs can't be picked out: isBossAura has no filter token.
+local RAID_DEBUFF_FILTER = "HARMFUL|!RAID|!PLAYER"
+local RAID_DEBUFF_MAX_ICONS = 2
+local RAID_DEBUFF_SCALE = 1.5   -- Blizzard draws boss debuffs 1.5 times as large too
+UnitButton.RAID_DEBUFF_TOP = 14 -- pixels from the top of the health bar: just below the name
+
+-- 1.5 times the HoT icons, but never larger than the room below the name. That
+-- room is counted with a resource bar, so the size is the same on every button.
+function UnitButton.GetRaidDebuffSize()
+    local settings = NeoHeal.db.layout
+    local style = FRAME_STYLES[settings.frameStyle] or FRAME_STYLES.forever
+    local healthHeight = settings.buttonHeight - 2 * style.inset
+    if settings.powerBar ~= "none" then healthHeight = healthHeight - POWER_BAR_HEIGHT - 1 end
+    local room = healthHeight - UnitButton.RAID_DEBUFF_TOP - 1
+    return math.max(8, math.min(math.floor(NeoHeal.Hots.GetIconSize() * RAID_DEBUFF_SCALE), room))
 end
 
 -- Out of combat only. Also rebuilds after a size change (containers can't resize).
-local function BuildDispelContainer(button)
-    if not button.unit or not NeoHeal.Dispel:CanDispelAnything() then return end
-    local size = NeoHeal.Hots.GetIconSize()
-    if button.dispelContainer then
-        if button.dispelContainer.neoSize == size then return end
-        button.dispelContainer:Hide()
+local function BuildRaidDebuffContainer(button)
+    if not button.unit then return end
+    local size = UnitButton.GetRaidDebuffSize()
+    if button.raidDebuffContainer then
+        if button.raidDebuffContainer.neoSize == size then return end
+        button.raidDebuffContainer:Hide()
     end
-    button.dispelContainer = NeoHeal.AuraContainer.Create(button.health, button.unit, {
-        filter = NeoHeal.Dispel.COMBAT_FILTER, corner = "BOTTOM", maxIcons = 1, size = size,
+    button.raidDebuffContainer = NeoHeal.AuraContainer.Create(button.health, button.unit, {
+        filter = RAID_DEBUFF_FILTER, corner = "TOP", offsetY = -UnitButton.RAID_DEBUFF_TOP,
+        maxIcons = RAID_DEBUFF_MAX_ICONS, size = size,
     })
 end
 
 local function UpdateAuras(button)
+    NeoHeal.AuraContainer.SetShown(button.raidDebuffContainer, NeoHeal.db.layout.showRaidDebuffs, button.unit)
     UpdateDispel(button)
     NeoHeal.Hots.Update(button)
 end
@@ -567,6 +651,14 @@ local function SetUnit(button, unit)
     elseif unit then
         NeoHeal:RunOutOfCombat("dispelContainer" .. button:GetName(), function() BuildDispelContainer(button) end)
     end
+    if button.raidDebuffContainer then
+        NeoHeal.AuraContainer.SetUnit(button.raidDebuffContainer, unit)
+    elseif unit then
+        NeoHeal:RunOutOfCombat("raidDebuffContainer" .. button:GetName(), function()
+            BuildRaidDebuffContainer(button)
+            if button.unit then UpdateAuras(button) end   -- show it straight away
+        end)
+    end
     if not unit then return end
 
     for _, event in ipairs(UNIT_EVENTS) do
@@ -644,7 +736,7 @@ function UnitButton.CreateVisuals(frame)
     -- Bottom-left, because the bottom-right corner holds the HoT icons.
     local statusText = overlay:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     statusText:SetPoint("BOTTOMLEFT", 3, 3)
-    statusText:SetTextColor(0.85, 0.85, 0.85)
+    statusText:SetTextColor(unpack(HEALTH_TEXT_COLOR))
     frame.statusText = statusText
 
     local raidIcon = overlay:CreateTexture(nil, "OVERLAY")
@@ -688,13 +780,18 @@ function UnitButton.CreateVisuals(frame)
     targetBorder:Hide()
     frame.targetBorder = targetBorder
 
-    -- Above the target border: a dispellable debuff matters more.
-    local dispelBorder = CreateFrame("Frame", nil, frame, "BackdropTemplate")
-    dispelBorder:SetAllPoints()
-    dispelBorder:SetFrameLevel(health:GetFrameLevel() + 5)
-    dispelBorder:SetBackdrop({ edgeFile = WHITE_TEXTURE, edgeSize = 2 })
-    dispelBorder:Hide()
-    frame.dispelBorder = dispelBorder
+    -- Test mode only: the real buttons get a game-drawn dispel strip
+    -- (BuildDispelContainer), the preview frames this look-alike.
+    local dispelStrip = CreateFrame("Frame", nil, frame)
+    dispelStrip:SetPoint("TOPLEFT")
+    dispelStrip:SetPoint("BOTTOMLEFT")
+    dispelStrip:SetWidth(DISPEL_STRIP_WIDTH)
+    dispelStrip:SetFrameLevel(health:GetFrameLevel() + 5)
+    dispelStrip.texture = dispelStrip:CreateTexture(nil, "OVERLAY")
+    dispelStrip.texture:SetAllPoints()
+    dispelStrip.texture:SetTexture(WHITE_TEXTURE)
+    dispelStrip:Hide()
+    frame.dispelStrip = dispelStrip
 end
 
 ---------------------------------------------------------------------------
@@ -754,10 +851,13 @@ function UnitButton:UpdateAllAuras()
     end
 end
 
--- Out of combat, after a size change or learning a first dispel spell.
-function UnitButton:RefreshDispelContainers()
+-- Out of combat, after a layout change or learning a first dispel spell: builds
+-- missing containers and rebuilds those of the wrong size.
+function UnitButton:RefreshAuraContainers()
     for button in pairs(self.buttons) do
         BuildDispelContainer(button)
+        BuildRaidDebuffContainer(button)
+        if button.unit then UpdateAuras(button) end   -- follows "Show raid debuffs"
     end
 end
 
