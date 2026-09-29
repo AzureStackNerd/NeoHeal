@@ -115,24 +115,75 @@ local function UpdateIdentity(button)
     button.health:SetStatusBarColor(color.r, color.g, color.b)
 end
 
--- The part of the bar that heals on their way (yours and other healers') will fill.
--- It sits right after the health fill and is clipped at the end of the bar.
-local function UpdateIncomingHeals(button)
-    local bar = button.incoming
-    local unit = button.unit
-    if not NeoHeal.db.layout.showIncomingHeals or IsDeadOrOffline(unit) then
-        bar:Hide()
-        return
-    end
-
-    local incoming = UnitGetIncomingHeals(unit)
-    if not IsSecret(incoming) and (not incoming or incoming <= 0) then
+-- Shows `amount` (health points, possibly secret) on one of the bars after the
+-- health fill; nil or 0 hides it. A hidden bar is also emptied: the absorb bar is
+-- anchored to the end of the incoming heals, which must then be the end of the health.
+local function ShowAmountBar(bar, unit, amount)
+    if not IsSecret(amount) and (not amount or amount <= 0) then
+        bar:SetValue(0)
         bar:Hide()
         return
     end
     -- Secret values can be shown by a StatusBar; pcall in case this client disagrees.
-    local ok = pcall(bar.SetMinMaxValues, bar, 0, UnitHealthMax(unit)) and pcall(bar.SetValue, bar, incoming)
+    local ok = pcall(bar.SetMinMaxValues, bar, 0, UnitHealthMax(unit)) and pcall(bar.SetValue, bar, amount)
+    if not ok then bar:SetValue(0) end
     bar:SetShown(ok)
+end
+
+-- The part of the bar that heals on their way (yours and other healers') will fill.
+-- It sits right after the health fill and is clipped at the end of the bar.
+local function UpdateIncomingHeals(button)
+    local unit = button.unit
+    local show = NeoHeal.db.layout.showIncomingHeals and not IsDeadOrOffline(unit)
+    ShowAmountBar(button.incoming, unit, show and UnitGetIncomingHeals(unit))
+end
+
+-- Shields (Power Word: Shield, ...): right after the incoming heals.
+local function UpdateAbsorbs(button)
+    local unit = button.unit
+    local show = UnitGetTotalAbsorbs and not IsDeadOrOffline(unit)
+    ShowAmountBar(button.absorb, unit, show and UnitGetTotalAbsorbs(unit))
+end
+
+-- Low health: the empty part of the health bar turns red below this fraction.
+-- In combat health can be secret, so a colour curve gives the tint (its alpha
+-- jumps from visible to 0 just above the threshold); the result is secret too,
+-- which SetVertexColor accepts.
+local LOW_HEALTH_THRESHOLD = 0.35
+local LOW_HEALTH_COLOR = { 0.8, 0, 0, 0.45 }
+local lowHealthCurve
+
+-- For a readable fraction (also used by the test mode preview).
+function UnitButton.ShowLowHealth(frame, fraction)
+    local r, g, b, a = unpack(LOW_HEALTH_COLOR)
+    frame.lowHealth:SetVertexColor(r, g, b, fraction <= LOW_HEALTH_THRESHOLD and a or 0)
+    frame.lowHealth:Show()
+end
+
+local function UpdateLowHealth(button, isDeadOrOffline)
+    local tint, unit = button.lowHealth, button.unit
+    if isDeadOrOffline then
+        tint:Hide()
+        return
+    end
+    if not (UnitHealthPercent and C_CurveUtil and C_CurveUtil.CreateColorCurve) then
+        UnitButton.ShowLowHealth(button, GetHealthFraction(unit))
+        return
+    end
+
+    if not lowHealthCurve then
+        local r, g, b, a = unpack(LOW_HEALTH_COLOR)
+        lowHealthCurve = C_CurveUtil.CreateColorCurve()
+        lowHealthCurve:SetType(Enum.LuaCurveType.Linear)
+        lowHealthCurve:AddPoint(0, CreateColor(r, g, b, a))
+        lowHealthCurve:AddPoint(LOW_HEALTH_THRESHOLD, CreateColor(r, g, b, a))
+        lowHealthCurve:AddPoint(LOW_HEALTH_THRESHOLD + 0.001, CreateColor(r, g, b, 0))
+        lowHealthCurve:AddPoint(1, CreateColor(r, g, b, 0))
+    end
+    local ok = pcall(function()
+        tint:SetVertexColor(UnitHealthPercent(unit, true, lowHealthCurve):GetRGBA())
+    end)
+    tint:SetShown(ok)
 end
 
 local function UpdateHealth(button)
@@ -158,7 +209,9 @@ local function UpdateHealth(button)
             button.statusText:SetText("")
         end
     end
+    UpdateLowHealth(button, status ~= nil)
     UpdateIncomingHeals(button)
+    UpdateAbsorbs(button)
 end
 
 -- The looks a frame can have (Layout > Frame style): background, border and bar
@@ -184,11 +237,40 @@ local FRAME_STYLES = {
     },
 }
 local INCOMING_HEAL_COLOR = { 0.3, 1, 0.3, 0.5 }
+local ABSORB_COLOR = { 0.8, 0.9, 1, 0.6 }
 
--- Places the health bar above the resource bar, or over the full height when the
--- resource bar is turned off. Only does work when the setting changed.
-local function LayoutBars(button)
-    local showPower = NeoHeal.db.layout.showPowerBar
+-- "Resource bar: Healers only". Classic players rarely pick a role, so without
+-- one the class decides.
+local HEALER_CLASSES = { PRIEST = true, DRUID = true, PALADIN = true, SHAMAN = true }
+
+-- Whether a member with this role and class gets a resource bar (the preview uses it too).
+function UnitButton.ShowsPowerBar(role, class)
+    local setting = NeoHeal.db.layout.powerBar
+    if setting == "healers" then
+        if role and role ~= "NONE" then return role == "HEALER" end
+        return HEALER_CLASSES[class] or false
+    end
+    return setting ~= "none"
+end
+
+local function ShowsPowerBarForButton(button)
+    local unit = button.unit
+    local role = UnitGroupRolesAssigned and UnitGroupRolesAssigned(unit)
+    local class = IsTrue(UnitIsPlayer(unit)) and select(2, UnitClass(unit)) or nil   -- pets: no class
+    if IsSecret(role) then
+        -- Should the role be hidden in combat, keep the bar as it is (roles don't
+        -- change in combat) rather than fall back to the class: a shadow priest
+        -- would get a bar for the length of the fight.
+        if button.powerBarShown ~= nil then return button.powerBarShown end
+        role = nil
+    end
+    if IsSecret(class) then class = nil end
+    return UnitButton.ShowsPowerBar(role, class)
+end
+
+-- Places the health bar above the resource bar, or over the full height without
+-- one. Only does work when that changed.
+local function LayoutBars(button, showPower)
     if button.powerBarShown == showPower then return end
     button.powerBarShown = showPower
 
@@ -203,44 +285,52 @@ local function LayoutBars(button)
     end
 end
 
--- Applies the frame style, then the bar layout. Only does work when a setting changed.
+UnitButton.LayoutBars = LayoutBars   -- the preview uses it too
+
+-- Places `bar` right after the end of `previous`'s fill.
+local function AnchorAfter(bar, previous)
+    local fill = previous:GetStatusBarTexture()
+    bar:ClearAllPoints()
+    bar:SetPoint("TOPLEFT", fill, "TOPRIGHT")
+    bar:SetPoint("BOTTOMLEFT", fill, "BOTTOMRIGHT")
+end
+
+-- Applies the frame style. Only does work when the setting changed; LayoutBars
+-- must follow, as the bar anchors depend on the style's inset.
 local function ApplyStyle(button)
     local style = FRAME_STYLES[NeoHeal.db.layout.frameStyle] or FRAME_STYLES.forever
-    if button.style ~= style then
-        button.style = style
-        local background = button.background
-        background:SetBackdrop(style.backdrop)
-        background:SetBackdropColor(unpack(style.backgroundColor))
-        background:SetBackdropBorderColor(unpack(style.borderColor))
+    if button.style == style then return end
+    button.style = style
+    local background = button.background
+    background:SetBackdrop(style.backdrop)
+    background:SetBackdropColor(unpack(style.backgroundColor))
+    background:SetBackdropBorderColor(unpack(style.borderColor))
 
-        local health, power, incoming, inset = button.health, button.power, button.incoming, style.inset
-        for _, bar in ipairs({ health, power, incoming }) do
-            bar:SetStatusBarTexture(style.barTexture)
-        end
-        incoming:SetStatusBarColor(unpack(INCOMING_HEAL_COLOR))
-        -- The incoming heals follow the end of the health fill.
-        local fill = health:GetStatusBarTexture()
-        incoming:ClearAllPoints()
-        incoming:SetPoint("TOPLEFT", fill, "TOPRIGHT")
-        incoming:SetPoint("BOTTOMLEFT", fill, "BOTTOMRIGHT")
-
-        power:SetPoint("BOTTOMLEFT", inset, inset)
-        power:SetPoint("BOTTOMRIGHT", -inset, inset)
-        health:SetPoint("TOPLEFT", inset, -inset)
-        health:SetPoint("TOPRIGHT", -inset, -inset)
-        button.powerBarShown = nil   -- the bottom anchors need the new inset too
+    local health, power, incoming, absorb, inset = button.health, button.power, button.incoming, button.absorb, style.inset
+    for _, bar in ipairs({ health, power, incoming, absorb }) do
+        bar:SetStatusBarTexture(style.barTexture)
     end
-    LayoutBars(button)
+    incoming:SetStatusBarColor(unpack(INCOMING_HEAL_COLOR))
+    absorb:SetStatusBarColor(unpack(ABSORB_COLOR))
+    -- Health, then incoming heals, then shields.
+    AnchorAfter(incoming, health)
+    AnchorAfter(absorb, incoming)
+
+    power:SetPoint("BOTTOMLEFT", inset, inset)
+    power:SetPoint("BOTTOMRIGHT", -inset, inset)
+    health:SetPoint("TOPLEFT", inset, -inset)
+    health:SetPoint("TOPRIGHT", -inset, -inset)
+    button.powerBarShown = nil   -- the bottom anchors need the new inset too
 end
 UnitButton.ApplyStyle = ApplyStyle   -- the preview uses it too
 
 -- Mana, rage, energy, ... in the game's own colours. The type can change, e.g.
 -- when a druid shifts into bear form.
 local function UpdatePower(button)
-    LayoutBars(button)
+    local unit = button.unit
+    LayoutBars(button, ShowsPowerBarForButton(button))
     if not button.powerBarShown then return end
 
-    local unit = button.unit
     local powerType, powerToken = UnitPowerType(unit)
     if IsSecret(powerType) then powerType, powerToken = nil, nil end
     local color = (powerToken and PowerBarColor[powerToken]) or FALLBACK_POWER_COLOR
@@ -443,6 +533,7 @@ local EVENT_UPDATES = {
     UNIT_MAXHEALTH = UpdateHealth,
     UNIT_CONNECTION = UpdateHealth,
     UNIT_HEAL_PREDICTION = UpdateIncomingHeals,
+    UNIT_ABSORB_AMOUNT_CHANGED = UpdateAbsorbs,
     UNIT_POWER_UPDATE = UpdatePower,
     UNIT_MAXPOWER = UpdatePower,
     UNIT_DISPLAYPOWER = UpdatePower,
@@ -486,7 +577,7 @@ end
 
 ---------------------------------------------------------------------------
 -- Building a button's look. Also used for the test-mode preview (Preview.lua).
--- Frame levels, bottom to top: background, health bar, incoming heals, HoT icons, text
+-- Frame levels, bottom to top: background, health bar, incoming heals and shields, HoT icons, text
 -- overlay (name, icons), target border, dispel border.
 ---------------------------------------------------------------------------
 function UnitButton.CreateVisuals(frame)
@@ -503,7 +594,8 @@ function UnitButton.CreateVisuals(frame)
     frame.content = content
 
     -- A thin resource bar along the bottom; the health bar fills the rest. Their
-    -- anchors, textures and the incoming heals' anchors are set by ApplyStyle.
+    -- anchors, textures and the anchors of the bars after the health fill are set
+    -- by ApplyStyle and LayoutBars.
     local power = CreateFrame("StatusBar", nil, content)
     power:SetHeight(POWER_BAR_HEIGHT)
     power:SetMinMaxValues(0, 1)
@@ -511,15 +603,31 @@ function UnitButton.CreateVisuals(frame)
 
     local health = CreateFrame("StatusBar", nil, content)
     health:SetMinMaxValues(0, 1)
-    health:SetClipsChildren(true)   -- incoming heals never draw past the end of the bar
+    health:SetClipsChildren(true)   -- incoming heals and shields never draw past the end of the bar
     frame.health = health
 
-    local incoming = CreateFrame("StatusBar", nil, health)
-    incoming:SetFrameLevel(health:GetFrameLevel() + 1)
-    incoming:Hide()
-    health:HookScript("OnSizeChanged", function(_, width) incoming:SetWidth(width) end)
-    frame.incoming = incoming
+    -- Low health tint (UpdateLowHealth): behind the health bar, so only its empty part shows it.
+    local lowHealth = content:CreateTexture(nil, "ARTWORK")
+    lowHealth:SetAllPoints(health)
+    lowHealth:SetTexture(WHITE_TEXTURE)
+    lowHealth:Hide()
+    frame.lowHealth = lowHealth
+
+    -- Incoming heals, then shields, each as wide as the health bar and starting
+    -- where the one before it ends.
+    local function CreateAmountBar()
+        local bar = CreateFrame("StatusBar", nil, health)
+        bar:SetFrameLevel(health:GetFrameLevel() + 1)
+        bar:SetMinMaxValues(0, 1)
+        bar:SetValue(0)
+        bar:Hide()
+        health:HookScript("OnSizeChanged", function(_, width) bar:SetWidth(width) end)
+        return bar
+    end
+    frame.incoming = CreateAmountBar()
+    frame.absorb = CreateAmountBar()
     ApplyStyle(frame)
+    LayoutBars(frame, true)
 
     NeoHeal.Hots.Attach(frame)   -- HoT icons at health level + 2
 

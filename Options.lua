@@ -134,6 +134,11 @@ local LAYOUT_SETTINGS = {
         { value = "first", label = L.MAIN_TANKS_FIRST },
         { value = "last",  label = L.MAIN_TANKS_LAST },
     } },
+    { kind = "choice", key = "powerBar", label = L.POWER_BAR, choices = {
+        { value = "all",     label = L.POWER_BAR_ALL },
+        { value = "healers", label = L.POWER_BAR_HEALERS },
+        { value = "none",    label = L.POWER_BAR_NONE },
+    } },
     { kind = "choice", label = L.TEST_MODE, get = GetTestMode, set = SetTestMode, choices = {
         { value = 0,  label = L.TEST_MODE_OFF },
         { value = 5,  label = format(L.TEST_MODE_SIZE, 5) },
@@ -147,7 +152,6 @@ local LAYOUT_SETTINGS = {
     { kind = "slider",   key = "scale",              label = L.SCALE,         min = 0.5, max = 2,   step = 0.05 },
     { kind = "checkbox", key = "showSolo",           label = L.SHOW_SOLO },
     { kind = "checkbox", key = "showHealthText",     label = L.SHOW_HEALTH_TEXT },
-    { kind = "checkbox", key = "showPowerBar",       label = L.SHOW_POWER_BAR },
     { kind = "checkbox", key = "showHotTimers",      label = L.SHOW_HOT_TIMERS },
     { kind = "checkbox", key = "showIncomingHeals",  label = L.SHOW_INCOMING_HEALS },
     { kind = "checkbox", key = "showAggro",          label = L.SHOW_AGGRO },

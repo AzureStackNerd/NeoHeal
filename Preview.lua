@@ -112,11 +112,16 @@ local function Decorate(frame, member)
     local healthFraction = 0.25 + ((member * 37) % 75) / 100
     local powerColor = PowerBarColor[POWER_BY_CLASS[class] or "MANA"]
 
-    NeoHeal.UnitButton.ApplyStyle(frame)   -- follows the frame style and "show resource bar"
+    NeoHeal.UnitButton.ApplyStyle(frame)
+    NeoHeal.UnitButton.LayoutBars(frame, NeoHeal.UnitButton.ShowsPowerBar(FAKE_ROLES[class] or "DAMAGER", class))
     frame.nameText:SetText(GetName(member))
     SetLeaderIcon(frame, LEADER_ICONS[member])
     SetHealthColor(frame, healthFraction, RAID_CLASS_COLORS[class])
     frame.health:SetValue(healthFraction)
+    NeoHeal.UnitButton.ShowLowHealth(frame, healthFraction)
+    -- Every seventh member (the first tank among them) wears a shield.
+    frame.absorb:SetValue(0.2)
+    frame.absorb:SetShown(member % 7 == 1)
     frame.power:SetStatusBarColor(powerColor.r, powerColor.g, powerColor.b)
     frame.power:SetValue(0.3 + ((member * 53) % 70) / 100)
     frame.statusText:SetText(NeoHeal.db.layout.showHealthText and format("%d%%", healthFraction * 100) or "")
@@ -153,10 +158,13 @@ local function DecoratePet(frame, pet)
     local powerColor = PowerBarColor[data.power]
 
     NeoHeal.UnitButton.ApplyStyle(frame)
+    NeoHeal.UnitButton.LayoutBars(frame, NeoHeal.UnitButton.ShowsPowerBar(nil, nil))   -- pets: no role or class
     frame.nameText:SetText(data.name)
     SetLeaderIcon(frame, nil)
     SetHealthColor(frame, healthFraction, PET_COLOR)
     frame.health:SetValue(healthFraction)
+    NeoHeal.UnitButton.ShowLowHealth(frame, healthFraction)
+    frame.absorb:Hide()
     frame.power:SetStatusBarColor(powerColor.r, powerColor.g, powerColor.b)
     frame.power:SetValue(0.5 + ((pet * 17) % 50) / 100)
     frame.statusText:SetText(NeoHeal.db.layout.showHealthText and format("%d%%", healthFraction * 100) or "")

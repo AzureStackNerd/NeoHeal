@@ -12,7 +12,7 @@ local DEFAULTS = {
         scale = 1,
         showSolo = true,
         showHealthText = true,
-        showPowerBar = true,
+        powerBar = "all",          -- resource bar for "all", "healers" or "none"
         showHotTimers = true,      -- countdown numbers on HoT icons (the swipe always shows)
         healthColor = "class",     -- "class": class colours, "health": green to red by health
         frameStyle = "forever",    -- "forever": flat and dark, "classic": stone background, tooltip border
@@ -89,6 +89,11 @@ function NeoHeal:PLAYER_LOGIN()
     if layout.showMainTanks ~= nil then
         if not layout.showMainTanks then layout.mainTankPosition = "none" end
         layout.showMainTanks = nil
+    end
+    -- "Show resource bar" used to be a toggle; off is now the "none" choice.
+    if layout.showPowerBar ~= nil then
+        if not layout.showPowerBar then layout.powerBar = "none" end
+        layout.showPowerBar = nil
     end
     layout.orientation = nil    -- groups are always columns now
     layout.showTitleBar = nil   -- the title bar is always shown now
