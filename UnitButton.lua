@@ -526,18 +526,21 @@ local function ShowExactMarker(texture, index)
 end
 UnitButton.ShowExactMarker = ShowExactMarker   -- for /neoheal debug
 
+local LayoutTopIcons   -- defined below, with the other top icons
+
 local function UpdateRaidTarget(button)
     local icon = button.raidIcon
     local index = GetRaidTargetIndex(button.unit)
     if not IsSecret(index) and not index then   -- never test a secret value itself
         icon:Hide()
-        return
+    else
+        if not ShowExactMarker(icon, index) then
+            icon:SetTexture(STAR_TEXTURE)
+            icon:SetTexCoord(0, 1, 0, 1)
+        end
+        icon:Show()
     end
-    if not ShowExactMarker(icon, index) then
-        icon:SetTexture(STAR_TEXTURE)
-        icon:SetTexCoord(0, 1, 0, 1)
-    end
-    icon:Show()
+    LayoutTopIcons(button)
 end
 
 -- A white border around the frame of your current target.
@@ -545,9 +548,69 @@ local function UpdateTargetHighlight(button)
     button.targetBorder:SetShown(IsTrue(UnitIsUnit(button.unit, "target")))
 end
 
--- A crown for the group leader, a flag for raid assistants, left of the name.
+-- The top line: the name on the left, always at the same spot so names line up
+-- down a column, and the status icons on the right. From the right: raid target
+-- marker, role icon, then a crown for the group leader or a flag for raid
+-- assistants. A name that doesn't fit is cut off at the icons.
+-- The role icon shows only for tanks and healers, as Blizzard's raid frames do: a
+-- main tank or main assist set in the raid window first (Classic raids use those
+-- more than chosen roles), else the chosen role.
 local LEADER_ICON = "Interface\\GroupFrame\\UI-Group-LeaderIcon"
 local ASSIST_ICON = "Interface\\GroupFrame\\UI-Group-AssistantIcon"
+-- Blizzard's own icons, the bare symbol without a circle where the client has it;
+-- per role the first atlas this client knows is used.
+local ROLE_ATLASES = {
+    MAINTANK   = { "RaidFrame-Icon-MainTank" },
+    MAINASSIST = { "RaidFrame-Icon-MainAssist" },
+    TANK       = { "roleicon-tiny-tank", "UI-LFG-RoleIcon-Tank-Micro-GroupFinder" },
+    HEALER     = { "roleicon-tiny-healer", "UI-LFG-RoleIcon-Healer-Micro-GroupFinder" },
+}
+
+local function FindRoleAtlas(role)
+    for _, atlas in ipairs(role and ROLE_ATLASES[role] or {}) do
+        if not (C_Texture and C_Texture.GetAtlasInfo) or C_Texture.GetAtlasInfo(atlas) then
+            return atlas
+        end
+    end
+end
+local TEXT_LEFT = DISPEL_STRIP_WIDTH + 2   -- name and health text start right of the dispel strip
+local NAME_HEIGHT = 12                     -- the name's line, with room for GameFontHighlightSmall
+local ICON_GAP = 2
+
+-- Places the visible top icons right to left and ends the name before them.
+-- Called whenever one of them is shown or hidden.
+function LayoutTopIcons(frame)   -- the local declared above UpdateRaidTarget
+    local x = -ICON_GAP
+    for _, icon in ipairs({ frame.raidIcon, frame.roleIcon, frame.leaderIcon }) do
+        if icon:IsShown() then
+            icon:ClearAllPoints()
+            icon:SetPoint("TOPRIGHT", x, icon == frame.raidIcon and -2 or -3)
+            x = x - icon:GetWidth() - ICON_GAP
+        end
+    end
+    frame.nameClip:SetPoint("TOPRIGHT", x - 1, -2)
+end
+
+-- `role` is a key of ROLE_ATLASES or anything else (no icon); `leaderTexture` may be nil.
+-- Also used by the test mode preview.
+function UnitButton.SetStatusIcons(frame, role, leaderTexture)
+    local atlas = FindRoleAtlas(role)
+    if atlas then frame.roleIcon:SetAtlas(atlas) end
+    frame.roleIcon:SetShown(atlas ~= nil)
+    if leaderTexture then frame.leaderIcon:SetTexture(leaderTexture) end
+    frame.leaderIcon:SetShown(leaderTexture ~= nil)
+    LayoutTopIcons(frame)
+end
+
+local function GetDisplayRole(unit)
+    local raidIndex = UnitInRaid(unit)
+    if raidIndex and not IsSecret(raidIndex) then
+        local raidRole = select(10, GetRaidRosterInfo(raidIndex))
+        if raidRole == "MAINTANK" or raidRole == "MAINASSIST" then return raidRole end   -- a secret never equals
+    end
+    local role = UnitGroupRolesAssigned and UnitGroupRolesAssigned(unit)
+    return not IsSecret(role) and role or nil
+end
 
 local function UpdateLeader(button)
     local unit = button.unit
@@ -557,9 +620,7 @@ local function UpdateLeader(button)
     elseif IsTrue(UnitIsGroupAssistant(unit)) then
         texture = ASSIST_ICON
     end
-    if texture then button.leaderIcon:SetTexture(texture) end
-    button.leaderIcon:SetShown(texture ~= nil)
-    button.nameText:SetPoint("TOPLEFT", texture and 14 or 3, -3)   -- make room for the icon
+    UnitButton.SetStatusIcons(button, GetDisplayRole(unit), texture)
 end
 
 -- One icon in the centre, most important first: ready check answer (while a
@@ -727,27 +788,41 @@ function UnitButton.CreateVisuals(frame)
     overlay:SetAllPoints()
     overlay:SetFrameLevel(health:GetFrameLevel() + 3)
 
-    local nameText = overlay:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    nameText:SetPoint("TOPLEFT", 3, -3)
-    nameText:SetPoint("TOPRIGHT", -16, -3)   -- leaves room for the raid target icon
+    -- A name too long is cut off at the end by this clipping frame, without "...":
+    -- the dots took the room of three letters. Clipping also works on a secret
+    -- name, which Lua couldn't shorten. Its right edge is set by LayoutTopIcons.
+    local nameClip = CreateFrame("Frame", nil, overlay)
+    nameClip:SetPoint("TOPLEFT", TEXT_LEFT, -2)
+    nameClip:SetPoint("TOPRIGHT", -3, -2)
+    nameClip:SetHeight(NAME_HEIGHT)
+    nameClip:SetClipsChildren(true)
+    frame.nameClip = nameClip
+
+    local nameText = nameClip:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    nameText:SetPoint("LEFT")   -- no right edge: the full name is drawn, the frame cuts it
+    nameText:SetJustifyH("LEFT")
     nameText:SetWordWrap(false)
     frame.nameText = nameText
 
     -- Bottom-left, because the bottom-right corner holds the HoT icons.
     local statusText = overlay:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    statusText:SetPoint("BOTTOMLEFT", 3, 3)
+    statusText:SetPoint("BOTTOMLEFT", TEXT_LEFT, 3)   -- lined up with the name
     statusText:SetTextColor(unpack(HEALTH_TEXT_COLOR))
     frame.statusText = statusText
 
     local raidIcon = overlay:CreateTexture(nil, "OVERLAY")
     raidIcon:SetSize(12, 12)
-    raidIcon:SetPoint("TOPRIGHT", -2, -2)
-    raidIcon:Hide()   -- its texture is set per marker (UpdateRaidTarget)
+    raidIcon:Hide()   -- its texture is set per marker (UpdateRaidTarget), placed by LayoutTopIcons
     frame.raidIcon = raidIcon
+
+    -- Placed by LayoutTopIcons.
+    local roleIcon = overlay:CreateTexture(nil, "OVERLAY")
+    roleIcon:SetSize(10, 10)
+    roleIcon:Hide()
+    frame.roleIcon = roleIcon
 
     local leaderIcon = overlay:CreateTexture(nil, "OVERLAY")
     leaderIcon:SetSize(10, 10)
-    leaderIcon:SetPoint("TOPLEFT", 2, -3)
     leaderIcon:Hide()
     frame.leaderIcon = leaderIcon
 

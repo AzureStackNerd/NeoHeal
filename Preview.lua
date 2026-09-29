@@ -99,10 +99,15 @@ end
 -- Member 1 leads the fake raid, member 2 assists.
 local LEADER_ICONS = { "Interface\\GroupFrame\\UI-Group-LeaderIcon", "Interface\\GroupFrame\\UI-Group-AssistantIcon" }
 
-local function SetLeaderIcon(frame, texture)
-    frame.leaderIcon:SetShown(texture ~= nil)
-    if texture then frame.leaderIcon:SetTexture(texture) end
-    frame.nameText:SetPoint("TOPLEFT", texture and 14 or 3, -3)
+-- Raid target markers on a few members: [member] = marker (1 star ... 8 skull).
+-- Member 1 also leads and tanks, so one frame shows every top icon at once.
+local FAKE_MARKERS = { [1] = 8, [4] = 1, [10] = 7, [15] = 5 }
+
+-- Raid marker, role icon (from the fake roles) and leader icon, right of the name.
+local function SetStatusIcons(frame, member)
+    local marker = FAKE_MARKERS[member]
+    frame.raidIcon:SetShown(marker ~= nil and NeoHeal.UnitButton.ShowExactMarker(frame.raidIcon, marker))
+    NeoHeal.UnitButton.SetStatusIcons(frame, FAKE_ROLES[GetClass(member)], LEADER_ICONS[member])
 end
 
 -- Fake maximum health, for "Health text: Health missing".
@@ -171,7 +176,7 @@ local function Decorate(frame, member)
     NeoHeal.UnitButton.ApplyStyle(frame)
     NeoHeal.UnitButton.LayoutBars(frame, NeoHeal.UnitButton.ShowsPowerBar(FAKE_ROLES[class] or "DAMAGER", class))
     frame.nameText:SetText(GetName(member))
-    SetLeaderIcon(frame, LEADER_ICONS[member])
+    SetStatusIcons(frame, member)
     SetHealthColor(frame, healthFraction, RAID_CLASS_COLORS[class])
     frame.health:SetValue(healthFraction)
     NeoHeal.UnitButton.ShowLowHealth(frame, healthFraction)
@@ -219,7 +224,8 @@ local function DecoratePet(frame, pet)
     NeoHeal.UnitButton.ApplyStyle(frame)
     NeoHeal.UnitButton.LayoutBars(frame, NeoHeal.UnitButton.ShowsPowerBar(nil, nil))   -- pets: no role or class
     frame.nameText:SetText(data.name)
-    SetLeaderIcon(frame, nil)
+    frame.raidIcon:Hide()
+    NeoHeal.UnitButton.SetStatusIcons(frame, nil, nil)   -- pets: no marker or role, never a leader
     SetHealthColor(frame, healthFraction, PET_COLOR)
     frame.health:SetValue(healthFraction)
     NeoHeal.UnitButton.ShowLowHealth(frame, healthFraction)
