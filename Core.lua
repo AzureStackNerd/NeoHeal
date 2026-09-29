@@ -130,6 +130,13 @@ function NeoHeal:GROUP_ROSTER_UPDATE()
     end)
 end
 
+-- Someone picked another role: "Resource bar: Healers only" follows it. Blizzard's
+-- own raid frames listen to this too; GROUP_ROSTER_UPDATE isn't promised to fire.
+function NeoHeal:PLAYER_ROLES_ASSIGNED()
+    if not self.db then return end
+    self.UnitButton:UpdateAllButtons()
+end
+
 -- A pet was summoned or dismissed: the pet header may need more or less room.
 function NeoHeal:UNIT_PET()
     if not self.db then return end
@@ -189,8 +196,11 @@ local eventFrame = CreateFrame("Frame")
 eventFrame:SetScript("OnEvent", function(_, event, ...) NeoHeal[event](NeoHeal, ...) end)
 for _, event in ipairs({ "PLAYER_LOGIN", "PLAYER_REGEN_ENABLED", "GROUP_ROSTER_UPDATE", "SPELLS_CHANGED",
                          "UNIT_PET", "RAID_TARGET_UPDATE", "PLAYER_TARGET_CHANGED", "PARTY_LEADER_CHANGED",
-                         "READY_CHECK", "READY_CHECK_CONFIRM", "READY_CHECK_FINISHED" }) do
-    eventFrame:RegisterEvent(event)
+                         "READY_CHECK", "READY_CHECK_CONFIRM", "READY_CHECK_FINISHED", "PLAYER_ROLES_ASSIGNED" }) do
+    -- Skip events this client doesn't know (registering one raises an error).
+    if not C_EventUtils or C_EventUtils.IsEventValid(event) then
+        eventFrame:RegisterEvent(event)
+    end
 end
 
 SLASH_NEOHEAL1 = "/neoheal"
