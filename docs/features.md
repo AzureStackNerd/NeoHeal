@@ -66,6 +66,8 @@ blessings are left out on purpose.
 
 ## Click casting (per character)
 
+![The Click Casting page: Healing Wave set to "Highest rank -1"](images/ClickCastingOptions.png)
+
 Pick a modifier (none, Shift, Ctrl, Alt), then choose per mouse button what a
 click does. Five mouse buttons plus three **hover keys**: keyboard keys that
 "click" the frame under the mouse (left click the key button to set, right click

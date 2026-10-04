@@ -24,7 +24,7 @@ Requirements as found on 2026-10-04:
 | Description | See [Description](#description). Switch the editor to Markdown first: it starts in WYSIWYG, where `##` and `-` show as plain text. |
 | License | MIT (the repo's `LICENSE`) |
 | Logo | [`images/logo.png`](images/logo.png) (512×512, made for NeoHeal) |
-| Media | [`images/Party5Options.png`](images/Party5Options.png) and [`images/Test40Options.png`](images/Test40Options.png), uploaded on 2026-10-04 |
+| Media | [`images/Party5Options.png`](images/Party5Options.png), [`images/Test40Options.png`](images/Test40Options.png) and [`images/ClickCastingOptions.png`](images/ClickCastingOptions.png); the first two were uploaded on 2026-10-04 |
 | Categories | Main: Unit Frames › Raid Frames. Also: Healer (combat roles) and Buffs & Debuffs; optionally the class categories Priest, Druid, Paladin and Shaman. All four were seen in the category list on 2026-10-04. |
 
 ### Summary
