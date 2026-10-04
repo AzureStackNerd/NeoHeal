@@ -7,9 +7,12 @@ local Support = {
 }
 
 -- The fake spells. Flash Heal has seven ranks; Abolish Disease has one and no
--- rank text, like rankless spells in the game.
+-- rank text, like rankless spells in the game. Weakened Soul and Power Word:
+-- Shield only have a name, for matching auras: they are in no spellbook.
 local FLASH_HEAL = { 2061, 9472, 9473, 9474, 10915, 10916, 10917 }   -- rank 1 to 7
 local ABOLISH_DISEASE = 552
+local WEAKENED_SOUL = 6788
+local POWER_WORD_SHIELD = 17
 Support.FLASH_HEAL = FLASH_HEAL
 Support.ABOLISH_DISEASE = ABOLISH_DISEASE
 
@@ -18,6 +21,8 @@ for rank, spellID in ipairs(FLASH_HEAL) do
     CATALOGUE[spellID] = { name = "Flash Heal", subName = "Rank " .. rank }
 end
 CATALOGUE[ABOLISH_DISEASE] = { name = "Abolish Disease", subName = "" }
+CATALOGUE[WEAKENED_SOUL] = { name = "Weakened Soul", subName = "" }
+CATALOGUE[POWER_WORD_SHIELD] = { name = "Power Word: Shield", subName = "Rank 1" }
 
 local state = {
     book = {},              -- spell IDs in the spellbook, in order
@@ -105,6 +110,8 @@ local function InstallGlobals()
     UnitPopup_OpenMenu = function(which, contextData) table.insert(Support.openedMenus, { which, contextData }) end
     UnitIsUnit = function(a, b) return a == b end
     issecretvalue = nil
+    -- Set by single tests (spec/prediction_test.lua); gone again for the next.
+    UnitGetIncomingHeals, UnitGetTotalAbsorbs, C_UnitAuras = nil, nil, nil
     SpellIsTargeting = function() return false end   -- no spell waiting for a target
 
     -- Messages at the top of the screen are kept in Support.errorMessages.
@@ -192,15 +199,32 @@ function Support.FakeTooltip(owner)
     return tooltip
 end
 
--- A StatusBar that keeps its range, value and whether it shows.
+-- A StatusBar that keeps its range, value, whether it shows, and the bar whose
+-- fill it is anchored to (bar.after; nil until anchored).
 function Support.FakeBar()
     local bar = { min = 0, max = 1, value = 0, shown = false }
+    bar.fill = { bar = bar }
     function bar:SetMinMaxValues(min, max) self.min, self.max = min, max end
     function bar:SetValue(value) self.value = value end
     function bar:SetShown(shown) self.shown = shown and true or false end
     function bar:Show() self.shown = true end
     function bar:Hide() self.shown = false end
+    function bar:IsShown() return self.shown end
+    function bar:GetStatusBarTexture() return self.fill end
+    function bar:ClearAllPoints() self.after = nil end
+    function bar:SetPoint(_, relativeTo) self.after = relativeTo.bar end
     return bar
+end
+
+-- A unit button with the bars of the health bar, as UnitButton.CreateVisuals makes them.
+function Support.FakeButton(unit)
+    local noop = function() end
+    local button = { unit = unit, highlight = { Show = noop, Hide = noop } }
+    for _, key in ipairs({ "health", "incoming", "prediction", "predictionRange", "predictionAbsorb", "absorb" }) do
+        button[key] = Support.FakeBar()
+    end
+    button.health.shown = true
+    return button
 end
 
 -- What the secure environment's SecureCmdOptionParse does with the option strings

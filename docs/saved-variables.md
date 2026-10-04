@@ -26,7 +26,7 @@ reaches existing installs automatically.
 | `healthColor` | `"class"` | `"class"`, `"health"` |
 | `frameStyle` | `"forever"` | `"forever"`, `"classic"` |
 | `showIncomingHeals` | `true` | |
-| `showHealPrediction` | `true` | the frame under the mouse shows what your left click heals |
+| `showHealPrediction` | `true` | the frame under the mouse shows what your left click heals or shields |
 | `showAggro` | `true` | |
 | `showTooltips` | `true` | |
 | `showPets` | `false` | |

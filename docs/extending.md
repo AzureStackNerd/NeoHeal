@@ -36,6 +36,11 @@ A size-like value that should differ between party and raid goes into both
    `UnitButton.buttons`.
 4. Treat every API value as possibly secret.
 5. Top-right icons must go through `LayoutTopIcons`, so the name clips correctly.
+6. A bar after the health fill goes into `AMOUNT_BARS` (UnitButton.lua), in
+   drawing order, and its update ends with `AnchorAmountBars(button)`. Every
+   button must have it, as `AnchorAmountBars` doesn't check: create it with
+   `CreateAmountBar` in `CreateVisuals`, give it its texture and colour in
+   `ApplyStyle`, and add it to `Support.FakeButton` for the tests.
 
 ## Track another class's HoTs
 
@@ -107,7 +112,9 @@ nothing else: LuaUnit is included as `spec/luaunit.lua`. The game never loads
 - Covered now: spell ranks, click-cast bindings, the row text, macros, event
   wiring, the tooltip (hovering, the binding lines and their heal amounts, the
   switch when a modifier changes), the heal prediction (which left click it
-  reads, and its two bars on hover; `Support.FakeBar` records a bar), clicks
+  reads, and its heal and shield bars on hover, with Weakened Soul and hidden
+  auras, and where each bar is anchored; `Support.FakeBar` records a bar and
+  `Support.FakeButton` holds a button's bars), clicks
   with modifiers (`RES_SNIPPET` runs as plain Lua with fakes for the secure
   environment), and the options window's click-casting menu.
   `spec/options_test.lua` builds the real window on fake frames that record each

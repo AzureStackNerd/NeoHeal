@@ -52,7 +52,7 @@ NeoHeal is a small set of party and raid frames for healers on WoW: Forever. Bin
 
 Hover a frame to see your bindings, and hold Shift, Ctrl or Alt to see that modifier's bindings. Each heal or shield shows how much the rank you cast heals or absorbs, for example "Healing Wave 237-280" or "942 absorb".
 
-The frame under your mouse also shows how much your left click would heal: a lighter bar right after the incoming heals, which follows Shift, Ctrl and Alt too.
+The frame under your mouse also shows how much your left click would heal: a lighter bar right after the incoming heals, which follows Shift, Ctrl and Alt too. A shield shows its absorb in blue, out of combat and only when the member can take one.
 
 ## Frames
 
@@ -86,7 +86,7 @@ The changelog per file, in Markdown like the description.
 ### 0.4.0
 
 ```markdown
-- Heal prediction: the frame under your mouse shows how much your left click would heal, as a lighter bar after the incoming heals. It follows Shift, Ctrl and Alt, and "Show left-click heal prediction" (Layout) turns it off.
+- Heal prediction: the frame under your mouse shows how much your left click would heal, as a lighter bar after the incoming heals. It follows Shift, Ctrl and Alt, and "Show left-click heal prediction" (Layout) turns it off. A shield on the left click shows its absorb in blue, out of combat and only when the member can take a new shield.
 - Tip: if a click casts something other than you bound, check the game's own Click Casting window (/run ToggleClickBindingFrame()). A spell bound there wins over NeoHeal's binding.
 ```
 

@@ -26,7 +26,7 @@ Locales/enUS.lua → Core → Spells → Dispel → AuraContainer → Hots → M
 | **AuraContainer** | Wrapper around Blizzard's `CustomAuraContainerTemplate`; the shared countdown font | `Create`, `CreateDispelStrip`, `SetUnit`, `SetShown`, `AddTimedCooldown` |
 | **Hots** | Own-HoT icons (Lua-drawn out of combat, container in combat) | `Attach`, `SetUnit`, `Update`, `RefreshSizes`, `ShowPreview` |
 | **MissingBuffs** | Missing class-buff icon; `*spell-neobuff` attribute for the buff click | `Attach`, `Update`, `UpdateClick`, `ExplainClick` |
-| **ClickCast** | Bindings ↔ secure attributes, hover keys, auto-res snippet, class defaults | `Initialize`, `Set`, `BuildAttributes`, `Apply`, `ApplyToButton`, `QueueApply`, `AddBindingsToTooltip`, `GetModifierPrefix`, `GetLeftClickHeal` |
+| **ClickCast** | Bindings ↔ secure attributes, hover keys, auto-res snippet, class defaults | `Initialize`, `Set`, `BuildAttributes`, `Apply`, `ApplyToButton`, `QueueApply`, `AddBindingsToTooltip`, `GetModifierPrefix`, `GetLeftClickAmount` |
 | **UnitButton** | Visuals and per-unit event handling of one frame | `CreateVisuals`, `Init`, `UpdateAllButtons`, `UpdateAllAuras`, `RefreshAuraContainers` |
 | **Layout** | Container, 8 group headers + main tank + pet header, arrangement, titles, move mode, size presets, test mode | `Create`, `Refresh`, `Arrange`, `FitToContent`, `SetTestMode`, `GetSize` |
 | **Preview** | Fake members for test mode, using `UnitButton.CreateVisuals` | `Show`, `Hide` |
@@ -146,12 +146,18 @@ charDB.bindings["shift-2"] = { action="spell", spellID=139, highestRank=true, ta
 - **The heal prediction** (`UpdateHealPrediction` in UnitButton.lua) shows only
   on the button under the mouse (`hoveredButton`, set by `OnEnter` and cleared
   by `OnLeave`, which also runs a frame after the button hides if it stays
-  hidden). `ClickCast:GetLeftClickHeal` gives the lowest and highest amount of
-  the applied left-click binding for the modifiers held now, read the same way
-  as the tooltip amounts. Two bars after the incoming heals show the
-  lowest amount and the rest of the range; the shields are anchored after them.
-  `UpdateHealth` redraws it, and while the mouse is over a button that shows a
-  tooltip or a prediction, one `MODIFIER_STATE_CHANGED` watcher redraws both.
+  hidden). `ClickCast:GetLeftClickAmount` gives the lowest and highest amount of
+  the applied left-click binding for the modifiers held now, and whether it heals
+  or absorbs, read the same way as the tooltip amounts. Two bars after the
+  incoming heals show a heal's lowest amount and the rest of its range; a third
+  shows a shield's absorb, unless `CanTakeShield` finds Weakened Soul or a
+  Power Word: Shield on the unit, or can't read its auras (in combat). The
+  shields come after them. `AnchorAmountBars` starts each shown bar at the end
+  of the last shown one, skipping hidden bars (in game a hidden, emptied bar
+  kept its old fill width: [forever-api.md](forever-api.md), section 5).
+  `UpdateHealth` and `UpdateAuras` redraw it, and while the mouse is over a
+  button that shows a tooltip or a prediction, one `MODIFIER_STATE_CHANGED`
+  watcher redraws both.
 - **Also target** turns the binding into a two-line macro using `mouseover`.
 
 ## Test mode
@@ -159,7 +165,7 @@ charDB.bindings["shift-2"] = { action="spell", spellID=139, highestRank=true, ta
 `Layout:SetTestMode(size)` hides the real headers, and `Refresh` hands off to
 `Preview:Show(size)`. That builds plain frames with the same
 `UnitButton.CreateVisuals` and decorates them with fake data. The preview reuses
-the exported helpers (`ApplyStyle`, `LayoutBars`, `ShowsPowerBar`,
-`ShowHealthText`, `ShowLowHealth`, `SetStatusIcons`, `Hots.ShowPreview`,
-`MissingBuffs.ShowPreview`) so it stays visually identical. Test mode ends when
-the options window closes or combat starts (Options.lua).
+the exported helpers (`ApplyStyle`, `LayoutBars`, `AnchorAmountBars`,
+`ShowsPowerBar`, `ShowHealthText`, `ShowLowHealth`, `SetStatusIcons`,
+`Hots.ShowPreview`, `MissingBuffs.ShowPreview`) so it stays visually identical.
+Test mode ends when the options window closes or combat starts (Options.lua).

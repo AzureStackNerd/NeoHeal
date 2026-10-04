@@ -68,7 +68,8 @@ Patterns used across the code:
   the game restricts addons; there always for compound tokens such as
   `targettarget`),
   `UnitInRange`, raid target index (**always**, even out of combat;
-  `SetRaidTargetIconTexture` still accepts it), sometimes roles and classes.
+  `SetRaidTargetIconTexture` still accepts it), sometimes roles and classes,
+  `UnitGetIncomingHeals` (section 5).
 
 ## 3. Auras: addons can't read them in combat
 
@@ -124,6 +125,30 @@ saved long before in the Click Casting window, instead of NeoHeal's Renew, while
 `/neoheal clicks` showed Renew on the frame. Removing the Blizzard binding fixed
 it. That a redirected click escapes Blizzard's bindings follows from the source
 and hasn't been checked in the game.
+
+## 5. A hidden, emptied StatusBar kept its old fill width
+
+The bars after the health fill (incoming heals, heal prediction, shields) each
+start where the bar before them ends. A bar with nothing to show is emptied
+(`SetValue(0)`) and hidden. Seen in the game on 2026-10-04: such a hidden,
+emptied bar still reported the fill width of what it last showed (11 pixels of
+a predicted shield), so a bar anchored to its end started that much too far
+right. With the heal prediction's two bars in between, the widths read in game
+add up to a real shield starting 32 pixels past the end of the health. That fits
+a screenshot in which a shield showed on Blizzard's own frame but not at all on
+NeoHeal's.
+
+`AnchorAmountBars` (UnitButton.lua) therefore anchors each shown bar to the last
+*shown* bar before it, or to the health fill, and runs after every change to
+which bars show.
+
+That check couldn't tell whether hiding the bar or emptying it kept the width,
+as that bar was both. A second check, right after a Lesser Heal on yourself
+landed, read a fill width of 0 for the incoming-heal bar while it was shown.
+`ShowAmountBar` only shows a bar without an amount above 0 when the amount is
+secret, so `UnitGetIncomingHeals` gave a secret there. During the cast that bar
+showed the heal (seen in game on 2026-10-04), so a shown bar at 0 does shrink,
+and skipping hidden bars is enough.
 
 ## Checklist before shipping a change
 

@@ -115,9 +115,39 @@ local function UpdateIdentity(button)
     button.health:SetStatusBarColor(color.r, color.g, color.b)
 end
 
+-- The bars after the health fill, in the order they are drawn (CreateVisuals).
+local AMOUNT_BARS = { "incoming", "prediction", "predictionRange", "predictionAbsorb", "absorb" }
+
+-- Places `bar` right after the end of `previous`'s fill.
+local function AnchorAfter(bar, previous)
+    local fill = previous:GetStatusBarTexture()
+    bar:ClearAllPoints()
+    bar:SetPoint("TOPLEFT", fill, "TOPRIGHT")
+    bar:SetPoint("BOTTOMLEFT", fill, "BOTTOMRIGHT")
+end
+
+-- Starts each shown bar where the shown one before it ends, or at the end of the
+-- health. Hidden bars are skipped: in game a hidden, emptied bar kept the width of
+-- what it last showed (seen on 2026-10-04), which pushed the bars after it to the
+-- right and a shield past the end of the frame. Runs after every change to which
+-- bars show.
+local function AnchorAmountBars(button)
+    local previous = button.health
+    for _, key in ipairs(AMOUNT_BARS) do
+        local bar = button[key]
+        if bar:IsShown() then
+            AnchorAfter(bar, previous)
+            previous = bar
+        end
+    end
+end
+
+UnitButton.AnchorAmountBars = AnchorAmountBars   -- the preview uses it too
+UnitButton.AMOUNT_BARS = AMOUNT_BARS             -- the tests use it
+
 -- Shows `amount` (health points, possibly secret) on one of the bars after the
--- health fill; nil or 0 hides it. A hidden bar is also emptied: each bar is
--- anchored to the end of the one before it, which must then be the end of the health.
+-- health fill; nil or 0 hides it. A hidden bar is also emptied. AnchorAmountBars
+-- must follow.
 local function ShowAmountBar(bar, unit, amount)
     if not IsSecret(amount) and (not amount or amount <= 0) then
         bar:SetValue(0)
@@ -136,25 +166,59 @@ local function UpdateIncomingHeals(button)
     local unit = button.unit
     local show = NeoHeal.db.layout.showIncomingHeals and not IsDeadOrOffline(unit)
     ShowAmountBar(button.incoming, unit, show and UnitGetIncomingHeals(unit))
+    AnchorAmountBars(button)
 end
 
 -- The button under the mouse (OnEnter, OnLeave): the only one with a heal prediction.
 local hoveredButton
 
+-- Weakened Soul, left by anyone's Power Word: Shield, keeps a new shield off the
+-- unit for 15 sec. The shield itself lasts up to 30 sec, and a new one cast on it
+-- doesn't add to it. Both matched by name, like the HoTs. Not checked in game.
+local WEAKENED_SOUL = 6788
+local POWER_WORD_SHIELD = 17
+
+-- Whether the unit has an aura of this name: true or false, or nil when the game
+-- hides the unit's auras, as it does in combat (docs/forever-api.md, section 3).
+local function HasAura(unit, name, filter)
+    for index = 1, 40 do
+        local ok, aura = pcall(C_UnitAuras.GetAuraDataByIndex, unit, index, filter)
+        if not ok or IsSecret(aura) or (aura and IsSecret(aura.name)) then return nil end
+        if not aura then return false end
+        if aura.name == name then return true end
+    end
+    return false
+end
+
+-- Whether a shield cast now would land and add to what the unit has: no Weakened
+-- Soul and no Power Word: Shield on it. False when that can't be told (hidden
+-- auras, or a name the game doesn't give): a shield that may not land is not predicted.
+local function CanTakeShield(unit)
+    local weakenedSoul, shield = C_Spell.GetSpellName(WEAKENED_SOUL), C_Spell.GetSpellName(POWER_WORD_SHIELD)
+    if not weakenedSoul or not shield then return false end
+    return HasAura(unit, weakenedSoul, "HARMFUL") == false and HasAura(unit, shield, "HELPFUL") == false
+end
+
 -- Heal prediction: what your left click, with the modifiers held now, would heal
--- the frame under the mouse (ClickCast:GetLeftClickHeal), right after the incoming
--- heals. The lowest amount is drawn lighter than incoming heals, the rest of the
--- range up to the highest amount lighter still. The amounts are plain numbers, so
--- this should work in combat too (not checked in game): the StatusBar places them
--- against the secret maximum.
+-- the frame under the mouse (ClickCast:GetLeftClickAmount), right after the
+-- incoming heals. The lowest amount, which the heal always reaches, is drawn
+-- lighter than incoming heals; the rest of the range up to the highest amount,
+-- which it may reach, in the same green but fainter. A shield on the left click
+-- shows its absorb instead, in the blue of the tooltip. The amounts are plain
+-- numbers, so heals show in combat too (seen in game on 2026-10-04): the StatusBar
+-- places them against the secret maximum.
 local function UpdateHealPrediction(button)
     local unit = button.unit
-    local low, high
+    local low, high, kind
     if button == hoveredButton and NeoHeal.db.layout.showHealPrediction and unit and not IsDeadOrOffline(unit) then
-        low, high = NeoHeal.ClickCast:GetLeftClickHeal()
+        low, high, kind = NeoHeal.ClickCast:GetLeftClickAmount()
     end
-    ShowAmountBar(button.prediction, unit, low)
-    ShowAmountBar(button.predictionRange, unit, low and high - low)
+    local heal = kind == "heal" and low
+    local absorb = kind == "absorb" and CanTakeShield(unit) and low
+    ShowAmountBar(button.prediction, unit, heal)
+    ShowAmountBar(button.predictionRange, unit, heal and high - low)
+    ShowAmountBar(button.predictionAbsorb, unit, absorb)
+    AnchorAmountBars(button)
 end
 
 -- Shields (Power Word: Shield, ...): right after the incoming heals and the heal prediction.
@@ -162,7 +226,9 @@ local function UpdateAbsorbs(button)
     local unit = button.unit
     local show = UnitGetTotalAbsorbs and not IsDeadOrOffline(unit)
     ShowAmountBar(button.absorb, unit, show and UnitGetTotalAbsorbs(unit))
+    AnchorAmountBars(button)
 end
+UnitButton.UpdateIncomingHeals, UnitButton.UpdateAbsorbs = UpdateIncomingHeals, UpdateAbsorbs   -- the tests use them
 
 -- Low health: the empty part of the health bar turns red below this fraction.
 -- In combat health can be secret, so a colour curve gives the tint (its alpha
@@ -309,7 +375,8 @@ local FRAME_STYLES = {
 }
 local INCOMING_HEAL_COLOR = { 0.3, 1, 0.3, 0.5 }
 local PREDICTION_COLOR = { 0.6, 1, 0.6, 0.6 }          -- the lowest amount of your left click
-local PREDICTION_RANGE_COLOR = { 0.85, 1, 0.85, 0.7 }   -- the rest of its range, lighter on the dark background
+local PREDICTION_RANGE_COLOR = { 0.6, 1, 0.6, 0.3 }     -- the rest of its range: what it may heal, so fainter
+local PREDICTION_ABSORB_COLOR = { 0.6, 0.8, 1, 0.6 }    -- a shield on your left click, the blue of its tooltip amount
 local ABSORB_COLOR = { 0.8, 0.9, 1, 0.6 }
 
 -- "Resource bar: Healers only". Classic players rarely pick a role, so without
@@ -360,14 +427,6 @@ end
 
 UnitButton.LayoutBars = LayoutBars   -- the preview uses it too
 
--- Places `bar` right after the end of `previous`'s fill.
-local function AnchorAfter(bar, previous)
-    local fill = previous:GetStatusBarTexture()
-    bar:ClearAllPoints()
-    bar:SetPoint("TOPLEFT", fill, "TOPRIGHT")
-    bar:SetPoint("BOTTOMLEFT", fill, "BOTTOMRIGHT")
-end
-
 -- Applies the frame style. Only does work when the setting changed; LayoutBars
 -- must follow, as the bar anchors depend on the style's inset.
 local function ApplyStyle(button)
@@ -380,19 +439,16 @@ local function ApplyStyle(button)
     background:SetBackdropBorderColor(unpack(style.borderColor))
 
     local health, power, incoming, absorb, inset = button.health, button.power, button.incoming, button.absorb, style.inset
-    local prediction, predictionRange = button.prediction, button.predictionRange
-    for _, bar in ipairs({ health, power, incoming, prediction, predictionRange, absorb }) do
+    local prediction, predictionRange, predictionAbsorb = button.prediction, button.predictionRange, button.predictionAbsorb
+    for _, bar in ipairs({ health, power, incoming, prediction, predictionRange, predictionAbsorb, absorb }) do
         bar:SetStatusBarTexture(style.barTexture)
     end
     incoming:SetStatusBarColor(unpack(INCOMING_HEAL_COLOR))
     prediction:SetStatusBarColor(unpack(PREDICTION_COLOR))
     predictionRange:SetStatusBarColor(unpack(PREDICTION_RANGE_COLOR))
+    predictionAbsorb:SetStatusBarColor(unpack(PREDICTION_ABSORB_COLOR))
     absorb:SetStatusBarColor(unpack(ABSORB_COLOR))
-    -- Health, then incoming heals, the heal prediction, and shields.
-    AnchorAfter(incoming, health)
-    AnchorAfter(prediction, incoming)
-    AnchorAfter(predictionRange, prediction)
-    AnchorAfter(absorb, predictionRange)
+    AnchorAmountBars(button)   -- to the fills of the new textures
 
     power:SetPoint("BOTTOMLEFT", inset, inset)
     power:SetPoint("BOTTOMRIGHT", -inset, inset)
@@ -504,6 +560,7 @@ local function UpdateAuras(button)
     UpdateDispel(button)
     NeoHeal.Hots.Update(button)
     NeoHeal.MissingBuffs.Update(button)
+    UpdateHealPrediction(button)   -- Weakened Soul coming or going changes the shield prediction
 end
 
 -- UNIT_AURA fires very often in raids, several times in a row for one unit. So an
@@ -802,8 +859,8 @@ function UnitButton.CreateVisuals(frame)
     frame.content = content
 
     -- A thin resource bar along the bottom; the health bar fills the rest. Their
-    -- anchors, textures and the anchors of the bars after the health fill are set
-    -- by ApplyStyle and LayoutBars.
+    -- anchors and textures are set by ApplyStyle and LayoutBars, the anchors of the
+    -- bars after the health fill by AnchorAmountBars.
     local power = CreateFrame("StatusBar", nil, content)
     power:SetHeight(POWER_BAR_HEIGHT)
     power:SetMinMaxValues(0, 1)
@@ -822,8 +879,8 @@ function UnitButton.CreateVisuals(frame)
     frame.lowHealth = lowHealth
 
     -- Incoming heals, the heal prediction (its lowest amount, then the rest of its
-    -- range) and shields, each as wide as the health bar and starting where the one
-    -- before it ends.
+    -- range), the shield prediction and shields, each as wide as the health bar and
+    -- starting where the last shown one before it ends.
     local function CreateAmountBar()
         local bar = CreateFrame("StatusBar", nil, health)
         bar:SetFrameLevel(health:GetFrameLevel() + 1)
@@ -836,6 +893,7 @@ function UnitButton.CreateVisuals(frame)
     frame.incoming = CreateAmountBar()
     frame.prediction = CreateAmountBar()
     frame.predictionRange = CreateAmountBar()
+    frame.predictionAbsorb = CreateAmountBar()
     frame.absorb = CreateAmountBar()
     ApplyStyle(frame)
     LayoutBars(frame, true)

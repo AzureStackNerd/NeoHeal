@@ -309,9 +309,7 @@ local function LoadHover(test, prepare)
     ns.charDB = { bindings = { ["1"] = Spell(FLASH_HEAL[7], true), ["shift-1"] = Spell(FLASH_HEAL[3], false) },
                   hoverKeys = {} }
     ns.db = { layout = { showTooltips = true } }
-    local noop = function() end
-    test.button = { unit = "party1", highlight = { Show = noop, Hide = noop },
-                    prediction = Support.FakeBar(), predictionRange = Support.FakeBar() }
+    test.button = Support.FakeButton("party1")
     ns.UnitButton.buttons[test.button] = true
     GameTooltip = Support.FakeTooltip()
     test.ns, test.UnitButton = ns, ns.UnitButton

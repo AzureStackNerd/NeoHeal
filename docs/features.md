@@ -42,7 +42,7 @@ top-left corner and grow to the right and down.
 | Where | What |
 | --- | --- |
 | Health bar | Class colour (pets green), or green → yellow → red by health |
-| After the health fill | Incoming heals (light green), then the heal prediction of your left click (lighter green, frame under the mouse only), then shields/absorbs (pale blue) |
+| After the health fill | Incoming heals (light green), then the heal prediction of your left click (lighter green, or blue for a shield; frame under the mouse only), then shields/absorbs (pale blue) |
 | Empty part of health bar | Turns red below 35% health |
 | Bottom strip | Resource bar (mana/rage/energy) for everyone, healers only, or nobody |
 | Top left | Name, cut off at the icons (no "...") |
@@ -133,20 +133,29 @@ Some spells show no number:
 
 **Heal prediction:** the frame under your mouse shows on its health bar how
 much your left click would heal, with the modifiers you hold right now. It sits
-right after the incoming heals: the lowest amount in a lighter green, the rest of
-the range up to the highest amount lighter still. Press or release Shift, Ctrl or
+right after the incoming heals: the lowest amount, which the heal always reaches,
+in a lighter green, and the rest of the range up to the highest amount, which it
+may reach, in the same green but fainter. Press or release Shift, Ctrl or
 Alt and it switches to that modifier's left click. It uses the same numbers as
 the tooltip, so the same limits apply (English descriptions, +healing not known
-yet), and a heal over time shows its total. It is meant to work in combat too,
-as the amounts are NeoHeal's own numbers and the bar places them against the
-member's (hidden) maximum health; should the game hide the spell description in
-combat, nothing shows. Neither is checked in game yet. Nothing shows when the
-left click:
+yet), and a heal over time shows its total. It works in combat too (seen in
+game on 2026-10-04): the amounts are NeoHeal's own numbers, the bar places them
+against the member's (hidden) maximum health, and the game still gives the spell
+description then.
+
+A shield on the left click (Power Word: Shield) shows its absorb instead, in the
+blue of its tooltip amount, where the shield will go. It doesn't show on a member
+with Weakened Soul, whoever's shield left it, as the cast would fail, nor on one
+whose Power Word: Shield is still up (it outlasts Weakened Soul), as a new one
+wouldn't add to it. In combat the game hides auras from addons, so neither can
+be ruled out and no shield prediction shows (seen in game on 2026-10-04, as was
+the shield prediction out of combat).
+
+Nothing shows when the left click:
 
 - does something other than cast a spell (Target, menu, missing buff), or casts on
   the unit's target or target's target;
-- casts a spell you haven't learned, a shield, or a spell without a readable
-  amount;
+- casts a spell you haven't learned, or a spell without a readable amount;
 - would hit a dead member (the click casts your res then) or an offline one.
 
 Turn it off with "Show left-click heal prediction" (Layout page). In test mode the

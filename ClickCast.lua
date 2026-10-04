@@ -527,10 +527,11 @@ local function ToNumber(text)
 end
 
 -- The heal prediction on a hovered frame (UnitButton.lua): how much a left click
--- with the modifiers held now heals that frame, as low and high numbers (the same
--- for a single amount). Nil when that click doesn't heal the frame: another action,
--- a spell cast on another unit, a spell not learned, a shield, or no readable amount.
-function ClickCast:GetLeftClickHeal()
+-- with the modifiers held now heals or shields that frame, as low and high numbers
+-- (the same for a single amount) and "heal" or "absorb". Nil when that click
+-- doesn't heal or shield the frame: another action, a spell cast on another unit,
+-- a spell not learned, or no readable amount.
+function ClickCast:GetLeftClickAmount()
     local bindings = self.appliedBindings or NeoHeal.charDB.bindings
     local binding = bindings[ClickCast.GetModifierPrefix() .. "1"]
     if not binding or binding.action ~= "spell" or binding.target ~= "unit"
@@ -538,9 +539,9 @@ function ClickCast:GetLeftClickHeal()
         return nil
     end
     local low, high, kind = MatchAmount(self:GetSpellValue(binding))
-    if kind ~= "heal" then return nil end
+    if not low then return nil end
     low = ToNumber(low)
-    return low, high and ToNumber(high) or low
+    return low, high and ToNumber(high) or low, kind
 end
 
 local HEAL_AMOUNT = "|cff33ff33%s|r"     -- green
