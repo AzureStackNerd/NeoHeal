@@ -18,7 +18,7 @@ Requirements as found on 2026-10-04:
 
 | Field | Value |
 | --- | --- |
-| Game | World of Warcraft |
+| Game | World of Warcraft (shown as "World of Warcraft Midnight" in the Author Console, the only WoW entry). Forever isn't a separate game: it's chosen per file, see [First file](#first-file). |
 | Name | NeoHeal |
 | Summary | See [Summary](#summary) |
 | Description | See [Description](#description). Switch the editor to Markdown first: it starts in WYSIWYG, where `##` and `-` show as plain text. |
@@ -61,6 +61,8 @@ Hover a frame to see your bindings, and hold Shift, Ctrl or Alt to see that modi
 Type /neoheal. Test mode shows a fake group of 5, 10, 25 or 40 players, so you can tune the look and layout without a raid.
 
 Made for WoW: Forever (Interface 16001). The heal amounts are read from the spell descriptions of an English client.
+
+NOTE: Inspired by HealBot which I loved to use for a long time
 ```
 
 ## First file
@@ -69,7 +71,7 @@ Made for WoW: Forever (Interface 16001). The heal amounts are read from the spel
 | --- | --- |
 | File | `NeoHeal-0.3.0.zip` (see [Building the ZIP](#building-the-zip)) |
 | Release type | Release |
-| Game version | Forever (listed as 1.60.1 by a third-party guide; pick the Forever entry) |
+| Game version | Only Forever (1.60.1); no Retail or Classic. This tag decides which installs the CurseForge app offers the file to. CurseForge doesn't check it against the `.toc` (`## Interface: 16001`), so keep the two in line. |
 
 Changelog (Markdown, like the description):
 
