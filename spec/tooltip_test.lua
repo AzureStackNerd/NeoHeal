@@ -11,7 +11,7 @@ end
 TestTooltip = {}
 
 function TestTooltip:setUp()
-    local ns = Support.Load({ "Locales/enUS.lua", "Spells.lua", "ClickCast.lua" })
+    local ns = Support.Load({ "Locales/enUS.lua", "Core.lua", "Spells.lua", "ClickCast.lua" })
     ns.Spells:Scan()
     ns.charDB = { bindings = {}, hoverKeys = {} }
     self.ns, self.ClickCast, self.bindings = ns, ns.ClickCast, ns.charDB.bindings
@@ -129,7 +129,7 @@ local CLASSIC = {
 }
 
 function TestTooltipAmounts:setUp()
-    local ns = Support.Load({ "Locales/enUS.lua", "Spells.lua", "ClickCast.lua" })
+    local ns = Support.Load({ "Locales/enUS.lua", "Core.lua", "Spells.lua", "ClickCast.lua" })
     ns.Spells:Scan()
     ns.charDB = { bindings = {}, hoverKeys = {} }
     self.ClickCast, self.bindings = ns.ClickCast, ns.charDB.bindings
@@ -310,7 +310,8 @@ local function LoadHover(test, prepare)
                   hoverKeys = {} }
     ns.db = { layout = { showTooltips = true } }
     local noop = function() end
-    test.button = { unit = "party1", highlight = { Show = noop, Hide = noop } }
+    test.button = { unit = "party1", highlight = { Show = noop, Hide = noop },
+                    prediction = Support.FakeBar(), predictionRange = Support.FakeBar() }
     ns.UnitButton.buttons[test.button] = true
     GameTooltip = Support.FakeTooltip()
     test.ns, test.UnitButton = ns, ns.UnitButton

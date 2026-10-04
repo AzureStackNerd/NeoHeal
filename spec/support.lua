@@ -192,6 +192,17 @@ function Support.FakeTooltip(owner)
     return tooltip
 end
 
+-- A StatusBar that keeps its range, value and whether it shows.
+function Support.FakeBar()
+    local bar = { min = 0, max = 1, value = 0, shown = false }
+    function bar:SetMinMaxValues(min, max) self.min, self.max = min, max end
+    function bar:SetValue(value) self.value = value end
+    function bar:SetShown(shown) self.shown = shown and true or false end
+    function bar:Show() self.shown = true end
+    function bar:Hide() self.shown = false end
+    return bar
+end
+
 -- What the secure environment's SecureCmdOptionParse does with the option strings
 -- the click snippet uses, "[@unit,dead,help] res" and "[nocombat] buff": the text
 -- after the conditions when they all hold, else nil. `world` says which units are

@@ -494,8 +494,7 @@ for _, choice in ipairs(ClickCast.TARGETS) do TARGET_LABELS[choice.value] = choi
 -- amounts only count when the sentence speaks of healing, so a damage spell gets
 -- none. English descriptions only: any other text gives nil, and the tooltip shows
 -- no number rather than a wrong one. A number may hold thousands commas, but never
--- ends in one ("332 to 381, then jumps"). Returns the amount text and "heal" or
--- "absorb", or nil.
+-- ends in one ("332 to 381, then jumps").
 local NUMBER = "([%d,]*%d)"
 local AMOUNT_PATTERNS = {
     { pattern = "[Hh]eal[^.]-for " .. NUMBER .. " to " .. NUMBER, kind = "heal" },
@@ -505,15 +504,43 @@ local AMOUNT_PATTERNS = {
     { pattern = "[Hh]eal[^.]-for " .. NUMBER .. " over", kind = "heal" },
 }
 
-function ClickCast.GetSpellAmount(spellID)
+-- The description's numbers: low and high as text (high nil for a single amount)
+-- and "heal" or "absorb"; nil when there are none. The heal prediction asks in
+-- combat too, so a description the game might hide then is left alone.
+local function MatchAmount(spellID)
     local description = C_Spell.GetSpellDescription(spellID)
-    if type(description) ~= "string" then return nil end
+    if NeoHeal.IsSecret(description) or type(description) ~= "string" then return nil end
     for _, entry in ipairs(AMOUNT_PATTERNS) do
         local low, high = description:match(entry.pattern)
-        if low then
-            return high and (low .. "-" .. high) or low, entry.kind
-        end
+        if low then return low, high, entry.kind end
     end
+end
+
+-- The amount text ("237-280" or "942") and "heal" or "absorb", or nil.
+function ClickCast.GetSpellAmount(spellID)
+    local low, high, kind = MatchAmount(spellID)
+    if low then return high and (low .. "-" .. high) or low, kind end
+end
+
+local function ToNumber(text)
+    return tonumber((text:gsub(",", "")))
+end
+
+-- The heal prediction on a hovered frame (UnitButton.lua): how much a left click
+-- with the modifiers held now heals that frame, as low and high numbers (the same
+-- for a single amount). Nil when that click doesn't heal the frame: another action,
+-- a spell cast on another unit, a spell not learned, a shield, or no readable amount.
+function ClickCast:GetLeftClickHeal()
+    local bindings = self.appliedBindings or NeoHeal.charDB.bindings
+    local binding = bindings[ClickCast.GetModifierPrefix() .. "1"]
+    if not binding or binding.action ~= "spell" or binding.target ~= "unit"
+            or not IsPlayerSpell(binding.spellID) then
+        return nil
+    end
+    local low, high, kind = MatchAmount(self:GetSpellValue(binding))
+    if kind ~= "heal" then return nil end
+    low = ToNumber(low)
+    return low, high and ToNumber(high) or low
 end
 
 local HEAL_AMOUNT = "|cff33ff33%s|r"     -- green

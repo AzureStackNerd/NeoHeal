@@ -166,6 +166,18 @@ local function ShowFakeDispel(frame, show)
     end
 end
 
+-- The heal prediction of your left click shows on the frame under the mouse;
+-- here member 5 plays that frame. Every other frame gets empty bars, as the
+-- shields are anchored to their end.
+local PREDICTION_MEMBER = 5
+
+local function ShowFakePrediction(frame, show)
+    frame.prediction:SetValue(show and 0.15 or 0)
+    frame.prediction:SetShown(show)
+    frame.predictionRange:SetValue(show and 0.05 or 0)
+    frame.predictionRange:SetShown(show)
+end
+
 -- Fills a frame with believable fake data. The same member always looks the same,
 -- so a main tank looks identical in the main tank group and in their own group.
 local function Decorate(frame, member)
@@ -180,6 +192,7 @@ local function Decorate(frame, member)
     SetHealthColor(frame, healthFraction, RAID_CLASS_COLORS[class])
     frame.health:SetValue(healthFraction)
     NeoHeal.UnitButton.ShowLowHealth(frame, healthFraction)
+    ShowFakePrediction(frame, NeoHeal.db.layout.showHealPrediction and member == PREDICTION_MEMBER)
     -- Every seventh member (the first tank among them) wears a shield.
     frame.absorb:SetValue(0.2)
     frame.absorb:SetShown(member % 7 == 1)
@@ -231,6 +244,7 @@ local function DecoratePet(frame, pet)
     SetHealthColor(frame, healthFraction, PET_COLOR)
     frame.health:SetValue(healthFraction)
     NeoHeal.UnitButton.ShowLowHealth(frame, healthFraction)
+    ShowFakePrediction(frame, false)
     frame.absorb:Hide()
     frame.power:SetStatusBarColor(powerColor.r, powerColor.g, powerColor.b)
     frame.power:SetValue(0.5 + ((pet * 17) % 50) / 100)

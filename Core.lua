@@ -23,6 +23,7 @@ local DEFAULTS = {
         healthColor = "class",     -- "class": class colours, "health": green to red by health
         frameStyle = "forever",    -- "forever": flat and dark, "classic": stone background, tooltip border
         showIncomingHeals = true,
+        showHealPrediction = true,   -- the frame under the mouse shows what your left click heals
         showAggro = true,
         showTooltips = true,
         showPets = false,

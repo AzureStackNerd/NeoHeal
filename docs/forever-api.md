@@ -118,7 +118,12 @@ instead of what NeoHeal binds on that button and modifiers. The exception is a
 click the click snippet redirects: Target off plain left and right click, Cast
 missing buff, and the res on a dead member. That click reaches Blizzard's check
 under NeoHeal's own virtual button name, which Blizzard's bindings don't cover.
-This follows from the source and hasn't been checked in the game.
+
+Seen in the game on 2026-10-04: a priest's Shift + left click cast Lesser Heal,
+saved long before in the Click Casting window, instead of NeoHeal's Renew, while
+`/neoheal clicks` showed Renew on the frame. Removing the Blizzard binding fixed
+it. That a redirected click escapes Blizzard's bindings follows from the source
+and hasn't been checked in the game.
 
 ## Checklist before shipping a change
 

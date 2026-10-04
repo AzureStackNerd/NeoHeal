@@ -26,7 +26,7 @@ Locales/enUS.lua → Core → Spells → Dispel → AuraContainer → Hots → M
 | **AuraContainer** | Wrapper around Blizzard's `CustomAuraContainerTemplate`; the shared countdown font | `Create`, `CreateDispelStrip`, `SetUnit`, `SetShown`, `AddTimedCooldown` |
 | **Hots** | Own-HoT icons (Lua-drawn out of combat, container in combat) | `Attach`, `SetUnit`, `Update`, `RefreshSizes`, `ShowPreview` |
 | **MissingBuffs** | Missing class-buff icon; `*spell-neobuff` attribute for the buff click | `Attach`, `Update`, `UpdateClick`, `ExplainClick` |
-| **ClickCast** | Bindings ↔ secure attributes, hover keys, auto-res snippet, class defaults | `Initialize`, `Set`, `BuildAttributes`, `Apply`, `ApplyToButton`, `QueueApply`, `AddBindingsToTooltip`, `GetModifierPrefix` |
+| **ClickCast** | Bindings ↔ secure attributes, hover keys, auto-res snippet, class defaults | `Initialize`, `Set`, `BuildAttributes`, `Apply`, `ApplyToButton`, `QueueApply`, `AddBindingsToTooltip`, `GetModifierPrefix`, `GetLeftClickHeal` |
 | **UnitButton** | Visuals and per-unit event handling of one frame | `CreateVisuals`, `Init`, `UpdateAllButtons`, `UpdateAllAuras`, `RefreshAuraContainers` |
 | **Layout** | Container, 8 group headers + main tank + pet header, arrangement, titles, move mode, size presets, test mode | `Create`, `Refresh`, `Arrange`, `FitToContent`, `SetTestMode`, `GetSize` |
 | **Preview** | Fake members for test mode, using `UnitButton.CreateVisuals` | `Show`, `Hide` |
@@ -53,7 +53,8 @@ Layout:Create
             ├─ copy click attributes neoClickName/Value1..N onto the button
             └─ header:CallMethod("InitUnitButton") ──► UnitButton.Init (Lua)
                  ├─ CreateVisuals (bars, texts, icons, borders, Hots.Attach, MissingBuffs.Attach)
-                 ├─ hooks: OnEnter/OnLeave (tooltip + bindings), OnClick (debug), PostClick (buff explain)
+                 ├─ hooks: OnEnter/OnLeave/OnHide (tooltip, heal prediction), OnClick (debug),
+                 │         PostClick (buff explain)
                  ├─ child frame `events` for unit events (no secure frame touched)
                  ├─ OnAttributeChanged "unit" ──► SetUnit
                  └─ RunOutOfCombat: RegisterForClicks, ApplyToButton (hover snippets),
@@ -67,9 +68,9 @@ re-registers unit events for the new unit, points the aura containers at it
 ### Updates
 
 `UpdateAll` calls one function per aspect: `ApplyStyle`, `UpdateIdentity`,
-`UpdateHealth` (which also updates the low-health tint, incoming heals and
-absorbs), `UpdatePower`, `UpdateRange`, `UpdateAuras`, `UpdateAggro`,
-`UpdateRaidTarget`, `UpdateTargetHighlight`, `UpdateLeader`,
+`UpdateHealth` (which also updates the low-health tint, incoming heals, the
+heal prediction and absorbs), `UpdatePower`, `UpdateRange`, `UpdateAuras`,
+`UpdateAggro`, `UpdateRaidTarget`, `UpdateTargetHighlight`, `UpdateLeader`,
 `UpdateStatusIcon`.
 
 Unit events map to these functions in `EVENT_UPDATES` (UnitButton.lua).
@@ -142,6 +143,15 @@ charDB.bindings["shift-2"] = { action="spell", spellID=139, highestRank=true, ta
   `Apply`), for the modifiers held now. A learned spell gets its amount from
   `ClickCast.GetSpellAmount`, which reads the description of the rank the click
   casts (`C_Spell.GetSpellDescription`).
+- **The heal prediction** (`UpdateHealPrediction` in UnitButton.lua) shows only
+  on the button under the mouse (`hoveredButton`, set by `OnEnter` and cleared
+  by `OnLeave`, which also runs a frame after the button hides if it stays
+  hidden). `ClickCast:GetLeftClickHeal` gives the lowest and highest amount of
+  the applied left-click binding for the modifiers held now, read the same way
+  as the tooltip amounts. Two bars after the incoming heals show the
+  lowest amount and the rest of the range; the shields are anchored after them.
+  `UpdateHealth` redraws it, and while the mouse is over a button that shows a
+  tooltip or a prediction, one `MODIFIER_STATE_CHANGED` watcher redraws both.
 - **Also target** turns the binding into a two-line macro using `mouseover`.
 
 ## Test mode

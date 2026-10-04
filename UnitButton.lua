@@ -116,8 +116,8 @@ local function UpdateIdentity(button)
 end
 
 -- Shows `amount` (health points, possibly secret) on one of the bars after the
--- health fill; nil or 0 hides it. A hidden bar is also emptied: the absorb bar is
--- anchored to the end of the incoming heals, which must then be the end of the health.
+-- health fill; nil or 0 hides it. A hidden bar is also emptied: each bar is
+-- anchored to the end of the one before it, which must then be the end of the health.
 local function ShowAmountBar(bar, unit, amount)
     if not IsSecret(amount) and (not amount or amount <= 0) then
         bar:SetValue(0)
@@ -138,7 +138,26 @@ local function UpdateIncomingHeals(button)
     ShowAmountBar(button.incoming, unit, show and UnitGetIncomingHeals(unit))
 end
 
--- Shields (Power Word: Shield, ...): right after the incoming heals.
+-- The button under the mouse (OnEnter, OnLeave): the only one with a heal prediction.
+local hoveredButton
+
+-- Heal prediction: what your left click, with the modifiers held now, would heal
+-- the frame under the mouse (ClickCast:GetLeftClickHeal), right after the incoming
+-- heals. The lowest amount is drawn lighter than incoming heals, the rest of the
+-- range up to the highest amount lighter still. The amounts are plain numbers, so
+-- this should work in combat too (not checked in game): the StatusBar places them
+-- against the secret maximum.
+local function UpdateHealPrediction(button)
+    local unit = button.unit
+    local low, high
+    if button == hoveredButton and NeoHeal.db.layout.showHealPrediction and unit and not IsDeadOrOffline(unit) then
+        low, high = NeoHeal.ClickCast:GetLeftClickHeal()
+    end
+    ShowAmountBar(button.prediction, unit, low)
+    ShowAmountBar(button.predictionRange, unit, low and high - low)
+end
+
+-- Shields (Power Word: Shield, ...): right after the incoming heals and the heal prediction.
 local function UpdateAbsorbs(button)
     local unit = button.unit
     local show = UnitGetTotalAbsorbs and not IsDeadOrOffline(unit)
@@ -262,6 +281,7 @@ local function UpdateHealth(button)
     end
     UpdateLowHealth(button, status ~= nil)
     UpdateIncomingHeals(button)
+    UpdateHealPrediction(button)
     UpdateAbsorbs(button)
 end
 
@@ -288,6 +308,8 @@ local FRAME_STYLES = {
     },
 }
 local INCOMING_HEAL_COLOR = { 0.3, 1, 0.3, 0.5 }
+local PREDICTION_COLOR = { 0.6, 1, 0.6, 0.6 }          -- the lowest amount of your left click
+local PREDICTION_RANGE_COLOR = { 0.85, 1, 0.85, 0.7 }   -- the rest of its range, lighter on the dark background
 local ABSORB_COLOR = { 0.8, 0.9, 1, 0.6 }
 
 -- "Resource bar: Healers only". Classic players rarely pick a role, so without
@@ -358,14 +380,19 @@ local function ApplyStyle(button)
     background:SetBackdropBorderColor(unpack(style.borderColor))
 
     local health, power, incoming, absorb, inset = button.health, button.power, button.incoming, button.absorb, style.inset
-    for _, bar in ipairs({ health, power, incoming, absorb }) do
+    local prediction, predictionRange = button.prediction, button.predictionRange
+    for _, bar in ipairs({ health, power, incoming, prediction, predictionRange, absorb }) do
         bar:SetStatusBarTexture(style.barTexture)
     end
     incoming:SetStatusBarColor(unpack(INCOMING_HEAL_COLOR))
+    prediction:SetStatusBarColor(unpack(PREDICTION_COLOR))
+    predictionRange:SetStatusBarColor(unpack(PREDICTION_RANGE_COLOR))
     absorb:SetStatusBarColor(unpack(ABSORB_COLOR))
-    -- Health, then incoming heals, then shields.
+    -- Health, then incoming heals, the heal prediction, and shields.
     AnchorAfter(incoming, health)
-    AnchorAfter(absorb, incoming)
+    AnchorAfter(prediction, incoming)
+    AnchorAfter(predictionRange, prediction)
+    AnchorAfter(absorb, predictionRange)
 
     power:SetPoint("BOTTOMLEFT", inset, inset)
     power:SetPoint("BOTTOMRIGHT", -inset, inset)
@@ -757,8 +784,9 @@ end
 
 ---------------------------------------------------------------------------
 -- Building a button's look. Also used for the test-mode preview (Preview.lua).
--- Frame levels, bottom to top: background, health bar, incoming heals and shields, HoT icons, text
--- overlay (name, icons), target border, dispel border.
+-- Frame levels, bottom to top: background, health bar, the bars after its fill (incoming
+-- heals, heal prediction, shields), HoT icons, text overlay (name, icons), target border,
+-- dispel border.
 ---------------------------------------------------------------------------
 function UnitButton.CreateVisuals(frame)
     -- Background and border, drawn by ApplyStyle in the chosen frame style.
@@ -783,7 +811,7 @@ function UnitButton.CreateVisuals(frame)
 
     local health = CreateFrame("StatusBar", nil, content)
     health:SetMinMaxValues(0, 1)
-    health:SetClipsChildren(true)   -- incoming heals and shields never draw past the end of the bar
+    health:SetClipsChildren(true)   -- incoming heals, prediction and shields never draw past the end of the bar
     frame.health = health
 
     -- Low health tint (UpdateLowHealth): behind the health bar, so only its empty part shows it.
@@ -793,8 +821,9 @@ function UnitButton.CreateVisuals(frame)
     lowHealth:Hide()
     frame.lowHealth = lowHealth
 
-    -- Incoming heals, then shields, each as wide as the health bar and starting
-    -- where the one before it ends.
+    -- Incoming heals, the heal prediction (its lowest amount, then the rest of its
+    -- range) and shields, each as wide as the health bar and starting where the one
+    -- before it ends.
     local function CreateAmountBar()
         local bar = CreateFrame("StatusBar", nil, health)
         bar:SetFrameLevel(health:GetFrameLevel() + 1)
@@ -805,6 +834,8 @@ function UnitButton.CreateVisuals(frame)
         return bar
     end
     frame.incoming = CreateAmountBar()
+    frame.prediction = CreateAmountBar()
+    frame.predictionRange = CreateAmountBar()
     frame.absorb = CreateAmountBar()
     ApplyStyle(frame)
     LayoutBars(frame, true)
@@ -933,29 +964,40 @@ local function ShowTooltip(button)
 end
 
 -- Pressing or releasing a modifier over a button rebuilds its tooltip, so it shows
--- that modifier's bindings. Listens only while a tooltip shows.
+-- that modifier's bindings, and redraws its heal prediction for that modifier's
+-- left click. Listens only while the mouse is over a button that shows either.
 local MODIFIER_EVENT = "MODIFIER_STATE_CHANGED"
 local canWatchModifiers = not C_EventUtils or C_EventUtils.IsEventValid(MODIFIER_EVENT)
-local tooltipWatcher = CreateFrame("Frame")
-tooltipWatcher:SetScript("OnEvent", function(self)
+local modifierWatcher = CreateFrame("Frame")
+modifierWatcher:SetScript("OnEvent", function(self)
     local button = self.button
-    if button and button.unit and GameTooltip:IsOwned(button) then ShowTooltip(button) end
+    if not button or not button.unit then return end
+    UpdateHealPrediction(button)
+    if GameTooltip:IsOwned(button) then ShowTooltip(button) end
 end)
 
 local function OnEnter(button)
     button.highlight:Show()
-    if NeoHeal.db.layout.showTooltips and button.unit then
-        ShowTooltip(button)
-        tooltipWatcher.button = button
-        if canWatchModifiers then tooltipWatcher:RegisterEvent(MODIFIER_EVENT) end
+    if not button.unit then return end
+    hoveredButton = button
+    UpdateHealPrediction(button)
+    local layout = NeoHeal.db.layout
+    if layout.showTooltips then ShowTooltip(button) end
+    if layout.showTooltips or layout.showHealPrediction then
+        modifierWatcher.button = button
+        if canWatchModifiers then modifierWatcher:RegisterEvent(MODIFIER_EVENT) end
     end
 end
 
 local function OnLeave(button)
     button.highlight:Hide()
-    if tooltipWatcher.button == button then
-        if canWatchModifiers then tooltipWatcher:UnregisterEvent(MODIFIER_EVENT) end
-        tooltipWatcher.button = nil
+    -- Redrawn even when another button already took the hover (its OnEnter came
+    -- first), so this one never keeps a prediction.
+    if hoveredButton == button then hoveredButton = nil end
+    UpdateHealPrediction(button)
+    if modifierWatcher.button == button then
+        if canWatchModifiers then modifierWatcher:UnregisterEvent(MODIFIER_EVENT) end
+        modifierWatcher.button = nil
     end
     if GameTooltip:IsOwned(button) then GameTooltip:Hide() end
 end
@@ -988,6 +1030,16 @@ function UnitButton.Init(button)
     -- PostClick also runs when the click snippet cancelled the click.
     button:HookScript("PostClick", NeoHeal.MissingBuffs.ExplainClick)
     button:HookScript("OnLeave", OnLeave)
+    -- A member leaving hides their button, maybe under the mouse. Should the client
+    -- not send OnLeave then, this keeps a later unit on that button from showing a
+    -- prediction (the hover-key snippet clears on _onhide for the same reason). It
+    -- waits a frame: Layout:Refresh and ClickCast:Apply hide and re-show every
+    -- header in one go, and a button that is back by then keeps its hover.
+    button:HookScript("OnHide", function(self)
+        C_Timer.After(0, function()
+            if not self:IsVisible() then OnLeave(self) end
+        end)
+    end)
 
     -- Unit events go to a plain child frame, so no protected frame is touched in combat.
     local events = CreateFrame("Frame", nil, button)

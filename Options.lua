@@ -187,6 +187,7 @@ local LAYOUT_SETTINGS = {
     { kind = "checkbox", key = "showMissingBuffs",   label = L.SHOW_MISSING_BUFFS },
     { kind = "checkbox", key = "showHotTimers",      label = L.SHOW_HOT_TIMERS },
     { kind = "checkbox", key = "showIncomingHeals",  label = L.SHOW_INCOMING_HEALS },
+    { kind = "checkbox", key = "showHealPrediction", label = L.SHOW_HEAL_PREDICTION },
     { kind = "checkbox", key = "showAggro",          label = L.SHOW_AGGRO },
     { kind = "checkbox", key = "showTooltips",       label = L.SHOW_TOOLTIPS },
     { kind = "checkbox", key = "showPets",           label = L.SHOW_PETS },

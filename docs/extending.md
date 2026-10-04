@@ -28,7 +28,7 @@ A size-like value that should differ between party and raid goes into both
 ## Add a new visual element to the frame
 
 1. Create it in `UnitButton.CreateVisuals(frame)`. Respect the frame-level
-   order: background < health < incoming/absorb (+1) < HoT icons (+2) <
+   order: background < health < incoming/prediction/absorb (+1) < HoT icons (+2) <
    overlay text (+3) < borders (+4) < dispel strip (+5).
 2. Write an `UpdateFoo(button)` function and call it from `UpdateAll`.
 3. If an event drives it, add `UNIT_FOO = UpdateFoo` to `EVENT_UPDATES` (unit
@@ -106,9 +106,10 @@ nothing else: LuaUnit is included as `spec/luaunit.lua`. The game never loads
 - One `*_test.lua` per module or feature, listed in `spec/run.lua`.
 - Covered now: spell ranks, click-cast bindings, the row text, macros, event
   wiring, the tooltip (hovering, the binding lines and their heal amounts, the
-  switch when a modifier changes), clicks with modifiers (`RES_SNIPPET` runs as
-  plain Lua with fakes for the secure environment), and the options window's
-  click-casting menu.
+  switch when a modifier changes), the heal prediction (which left click it
+  reads, and its two bars on hover; `Support.FakeBar` records a bar), clicks
+  with modifiers (`RES_SNIPPET` runs as plain Lua with fakes for the secure
+  environment), and the options window's click-casting menu.
   `spec/options_test.lua` builds the real window on fake frames that record each
   dropdown's menu builder, so a test can click through a menu. Fake frames from
   `CreateFrame` keep their scripts and events, so a test can fire an event at

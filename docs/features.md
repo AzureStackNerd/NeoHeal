@@ -42,7 +42,7 @@ top-left corner and grow to the right and down.
 | Where | What |
 | --- | --- |
 | Health bar | Class colour (pets green), or green → yellow → red by health |
-| After the health fill | Incoming heals (light green), then shields/absorbs (pale blue) |
+| After the health fill | Incoming heals (light green), then the heal prediction of your left click (lighter green, frame under the mouse only), then shields/absorbs (pale blue) |
 | Empty part of health bar | Turns red below 35% health |
 | Bottom strip | Resource bar (mana/rage/energy) for everyone, healers only, or nobody |
 | Top left | Name, cut off at the icons (no "...") |
@@ -131,9 +131,36 @@ Some spells show no number:
   then. NeoHeal doesn't ask the game to load it; spells in your spellbook are
   normally loaded. Not checked in game.
 
+**Heal prediction:** the frame under your mouse shows on its health bar how
+much your left click would heal, with the modifiers you hold right now. It sits
+right after the incoming heals: the lowest amount in a lighter green, the rest of
+the range up to the highest amount lighter still. Press or release Shift, Ctrl or
+Alt and it switches to that modifier's left click. It uses the same numbers as
+the tooltip, so the same limits apply (English descriptions, +healing not known
+yet), and a heal over time shows its total. It is meant to work in combat too,
+as the amounts are NeoHeal's own numbers and the bar places them against the
+member's (hidden) maximum health; should the game hide the spell description in
+combat, nothing shows. Neither is checked in game yet. Nothing shows when the
+left click:
+
+- does something other than cast a spell (Target, menu, missing buff), or casts on
+  the unit's target or target's target;
+- casts a spell you haven't learned, a shield, or a spell without a readable
+  amount;
+- would hit a dead member (the click casts your res then) or an offline one.
+
+Turn it off with "Show left-click heal prediction" (Layout page). In test mode the
+fifth fake member shows it, as if under the mouse.
+
 **Auto-resurrect:** a spell click on a dead friendly member casts your res
 spell instead (Priest Resurrection, Paladin Redemption, Shaman Ancestral Spirit,
 Druid Rebirth). Target and menu clicks keep working.
+
+**A click casts something else?** The game's own Click Casting window
+(`/run ToggleClickBindingFrame()`) keeps bindings of its own. A spell or macro
+bound there on the same mouse button and modifiers is cast instead of NeoHeal's
+binding. `/neoheal clicks` prints what NeoHeal has bound for the
+click; if that is right, remove the binding in the Click Casting window.
 
 **Reset to class defaults** restores the starting bindings: Ctrl+left = Target
 and Ctrl+right = menu, plus the class's main heals and cures where learned.
@@ -161,8 +188,8 @@ Left column:
 5 players edits Party and 10+ edits Raid.
 
 Right column (checkboxes): show when solo, raid debuffs, missing buffs, HoT
-timers, incoming heals, aggro, tooltips, pets, hide Blizzard group frames
-(turning this off again needs a `/reload`).
+timers, incoming heals, left-click heal prediction, aggro, tooltips, pets, hide
+Blizzard group frames (turning this off again needs a `/reload`).
 
 Changes made in combat are applied when combat ends. The window shows a red
 notice while that is the case.
