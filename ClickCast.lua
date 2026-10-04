@@ -487,12 +487,53 @@ end
 local TARGET_LABELS = {}   -- [target value] = label
 for _, choice in ipairs(ClickCast.TARGETS) do TARGET_LABELS[choice.value] = choice.label end
 
--- "Flash Heal", or "Flash Heal (Unit's target)" when it doesn't go to the clicked unit.
+-- How much a spell heals or absorbs, read from its description, so the numbers of
+-- exactly this rank: "Heals a friendly target for 237 to 280." gives "237-280";
+-- "... absorbing 942 damage" an absorb of 942; a HoT gives its total ("Heals the
+-- target for 32 over 12 sec."); Holy Shock its "204 to 220 healing". Healing
+-- amounts only count when the sentence speaks of healing, so a damage spell gets
+-- none. English descriptions only: any other text gives nil, and the tooltip shows
+-- no number rather than a wrong one. A number may hold thousands commas, but never
+-- ends in one ("332 to 381, then jumps"). Returns the amount text and "heal" or
+-- "absorb", or nil.
+local NUMBER = "([%d,]*%d)"
+local AMOUNT_PATTERNS = {
+    { pattern = "[Hh]eal[^.]-for " .. NUMBER .. " to " .. NUMBER, kind = "heal" },
+    { pattern = NUMBER .. " to " .. NUMBER .. " healing", kind = "heal" },
+    { pattern = "absorbing " .. NUMBER .. " damage", kind = "absorb" },
+    { pattern = "[Hh]eal[^.]-" .. NUMBER .. " damage over", kind = "heal" },
+    { pattern = "[Hh]eal[^.]-for " .. NUMBER .. " over", kind = "heal" },
+}
+
+function ClickCast.GetSpellAmount(spellID)
+    local description = C_Spell.GetSpellDescription(spellID)
+    if type(description) ~= "string" then return nil end
+    for _, entry in ipairs(AMOUNT_PATTERNS) do
+        local low, high = description:match(entry.pattern)
+        if low then
+            return high and (low .. "-" .. high) or low, entry.kind
+        end
+    end
+end
+
+local HEAL_AMOUNT = "|cff33ff33%s|r"     -- green
+local ABSORB_AMOUNT = "|cff99ccff%s|r"   -- light blue, a little darker than the shield bar
+
+-- "Flash Heal", or "Flash Heal (Unit's target)" when it doesn't go to the clicked
+-- unit; a learned spell gets its amount after it: "Healing Wave 237-280".
 local function DescribeForTooltip(binding)
     local text = ClickCast:Describe(binding)
     local target = binding.action ~= "menu" and binding.action ~= "buff" and binding.target
     if target and target ~= "unit" then
         text = format("%s (%s)", text, TARGET_LABELS[target] or target)
+    end
+    if binding.action == "spell" and IsPlayerSpell(binding.spellID) then
+        local amount, kind = ClickCast.GetSpellAmount(ClickCast:GetSpellValue(binding))
+        if kind == "absorb" then
+            text = format("%s " .. ABSORB_AMOUNT, text, format(L.TOOLTIP_ABSORB, amount))
+        elseif amount then
+            text = format("%s " .. HEAL_AMOUNT, text, amount)
+        end
     end
     return text
 end

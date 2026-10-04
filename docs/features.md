@@ -98,6 +98,26 @@ effect, when combat ends. One thing it doesn't show: on a dead friendly member a
 spell click casts your res instead (see Auto-resurrect), while the tooltip still
 lists the spells. The "Show tooltips" option switches the whole tooltip off.
 
+After a learned spell the tooltip shows how much it heals or absorbs, for exactly
+the rank the click casts:
+
+- A heal shows its range in green, e.g. "Healing Wave 237-280". This includes
+  Chain Heal (its first target) and Holy Shock (its healing).
+- A heal over time shows its total, and Regrowth its direct heal.
+- A shield shows its absorb in light blue, e.g. "Power Word: Shield 942 absorb".
+
+The numbers come from the spell's own description, so it's not known yet whether
+they include +healing from gear. In game on 2026-10-04 there was no +healing to
+compare (`GetSpellBonusHealing()` returned 0). Only English descriptions are read.
+
+Some spells show no number:
+
+- Damage spells and cures.
+- Tranquility and Lay on Hands, whose descriptions give no healing range.
+- A spell whose data the game hasn't loaded yet: its description is empty until
+  then. NeoHeal doesn't ask the game to load it; spells in your spellbook are
+  normally loaded. Not checked in game.
+
 **Auto-resurrect:** a spell click on a dead friendly member casts your res
 spell instead (Priest Resurrection, Paladin Redemption, Shaman Ancestral Spirit,
 Druid Rebirth). Target and menu clicks keep working.

@@ -139,7 +139,9 @@ charDB.bindings["shift-2"] = { action="spell", spellID=139, highestRank=true, ta
   redirects nothing.
 - **The tooltip** (`ClickCast:AddBindingsToTooltip`) lists the bindings as last
   applied to the frames (`appliedBindings` and `appliedHoverKeys`, set by
-  `Apply`), for the modifiers held now.
+  `Apply`), for the modifiers held now. A learned spell gets its amount from
+  `ClickCast.GetSpellAmount`, which reads the description of the rank the click
+  casts (`C_Spell.GetSpellDescription`).
 - **Also target** turns the binding into a two-line macro using `mouseover`.
 
 ## Test mode

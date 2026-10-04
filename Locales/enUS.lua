@@ -57,6 +57,7 @@ L.TARGET_UNIT = "Clicked unit"
 L.TARGET_UNIT_TARGET = "Unit's target"
 L.TARGET_UNIT_TARGETTARGET = "Target of target"
 L.RESET_BINDINGS = "Reset to class defaults"
+L.TOOLTIP_ABSORB = "%s absorb"   -- after a shield in the tooltip: "Power Word: Shield 942 absorb"
 
 -- Layout
 L.FRAME_STYLE = "Frame style"

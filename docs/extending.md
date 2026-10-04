@@ -105,9 +105,10 @@ nothing else: LuaUnit is included as `spec/luaunit.lua`. The game never loads
   has no rank). `Support.Load({ files })` loads addon files into a fresh namespace.
 - One `*_test.lua` per module or feature, listed in `spec/run.lua`.
 - Covered now: spell ranks, click-cast bindings, the row text, macros, event
-  wiring, the tooltip (hovering, the binding lines, the switch when a modifier
-  changes), clicks with modifiers (`RES_SNIPPET` runs as plain Lua with fakes for
-  the secure environment), and the options window's click-casting menu.
+  wiring, the tooltip (hovering, the binding lines and their heal amounts, the
+  switch when a modifier changes), clicks with modifiers (`RES_SNIPPET` runs as
+  plain Lua with fakes for the secure environment), and the options window's
+  click-casting menu.
   `spec/options_test.lua` builds the real window on fake frames that record each
   dropdown's menu builder, so a test can click through a menu. Fake frames from
   `CreateFrame` keep their scripts and events, so a test can fire an event at

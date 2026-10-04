@@ -24,6 +24,7 @@ local state = {
     known = {},             -- [spellID] = true
     subtextMissing = false, -- C_Spell.GetSpellSubtext returns "" for everything
     modifiers = {},         -- held modifier keys: { shift = true, ... }
+    descriptions = {},      -- [spellID] = description text
 }
 
 local function Wipe(t)
@@ -120,8 +121,15 @@ local function InstallGlobals()
             if not spell or state.subtextMissing then return "" end
             return spell.subName
         end,
+        -- No description until a test sets one (Support.SetDescription).
+        GetSpellDescription = function(spellID) return state.descriptions[spellID] end,
     }
-    IsPlayerSpell = function(spellID) return state.known[spellID] == true end
+    state.descriptions = {}
+    -- Strict like the game, which errors on a missing spell ID.
+    IsPlayerSpell = function(spellID)
+        assert(type(spellID) == "number", "IsPlayerSpell needs a spell ID")
+        return state.known[spellID] == true
+    end
 
     -- One skill line holding the spellbook.
     C_SpellBook = {
@@ -143,6 +151,11 @@ function Support.SetKnown(spellIDs)
     state.book = spellIDs
     Wipe(state.known)
     for _, spellID in ipairs(spellIDs) do state.known[spellID] = true end
+end
+
+-- The text C_Spell.GetSpellDescription returns for a spell ID.
+function Support.SetDescription(spellID, text)
+    state.descriptions[spellID] = text
 end
 
 -- Which modifier keys are held, e.g. { shift = true, ctrl = true }.
