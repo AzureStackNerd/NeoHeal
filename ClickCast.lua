@@ -3,6 +3,7 @@
 -- Bindings are saved per character in NeoHealCharDB.bindings, keyed by modifier
 -- prefix + button id, e.g. "1" (left click) or "shift-2" (shift + right click):
 --     { action = "spell", spellID = 2061, highestRank = true, target = "unit", alsoTarget = false }
+--     (with highestRank, rankOffset = 1 casts the rank below the highest; nil means 0)
 --     { action = "target", target = "targettarget" }
 --     { action = "menu" }
 --     { action = "buff" }   -- casts your missing buff (MissingBuffs.lua), or does nothing
@@ -244,7 +245,13 @@ function ClickCast:ResetToDefaults()
     self:QueueApply()
 end
 
--- "Flash Heal", "Flash Heal (Rank 3)", "Remove Curse (not learned)", "Target", ...
+-- True for a plain "Highest rank" binding: it names no rank, so the game casts the highest.
+local function CastsHighestRank(binding)
+    return binding.highestRank and (binding.rankOffset or 0) == 0
+end
+
+-- "Flash Heal", "Flash Heal (Rank 3)", "Flash Heal (Rank 6, highest -1)",
+-- "Remove Curse (not learned)", "Target", ...
 function ClickCast:Describe(binding)
     if not binding then return L.ACTION_NONE end
     if binding.action == "target" then return L.ACTION_TARGET end
@@ -255,7 +262,12 @@ function ClickCast:Describe(binding)
     if not IsPlayerSpell(binding.spellID) then
         return format("%s (%s)", name, L.NOT_LEARNED)
     end
-    local rank = not binding.highestRank and Spells:GetRankText(binding.spellID)
+    if CastsHighestRank(binding) then return name end
+    local rank = Spells:GetRankText(self:GetSpellValue(binding))
+    if binding.highestRank then
+        local label = rank and format("%s, %s", rank, L.HIGHEST_RANK_MINUS_ONE_SHORT) or L.HIGHEST_RANK_MINUS_ONE_SHORT
+        return format("%s (%s)", name, label)
+    end
     return rank and format("%s (%s)", name, rank) or name
 end
 
@@ -264,9 +276,10 @@ end
 ---------------------------------------------------------------------------
 
 -- What goes into the "spell" attribute. A spell ID casts exactly that rank.
+-- "Highest rank" bindings resolve again whenever spells change (Core.lua).
 function ClickCast:GetSpellValue(binding)
     if binding.highestRank then
-        return Spells:GetHighestRank(binding.spellID) or binding.spellID
+        return Spells:GetHighestRank(binding.spellID, binding.rankOffset) or binding.spellID
     end
     return binding.spellID
 end
@@ -278,8 +291,9 @@ end
 --     /cast [@mouseover] Flash Heal(Rank 3)
 function ClickCast:BuildTargetingMacro(binding)
     local unit = "mouseover" .. (binding.target ~= "unit" and binding.target or "")
-    local spell = Spells.GetName(binding.spellID) or ""
-    local rank = not binding.highestRank and Spells:GetRankText(binding.spellID)
+    local spellID = self:GetSpellValue(binding)
+    local spell = Spells.GetName(spellID) or ""
+    local rank = not CastsHighestRank(binding) and Spells:GetRankText(spellID)
     if rank then spell = format("%s(%s)", spell, rank) end
     return format("/target %s\n/cast [@%s] %s", unit, unit, spell)
 end
