@@ -26,7 +26,7 @@ Locales/enUS.lua → Core → Spells → Dispel → AuraContainer → Hots → M
 | **AuraContainer** | Wrapper around Blizzard's `CustomAuraContainerTemplate`; the shared countdown font | `Create`, `CreateDispelStrip`, `SetUnit`, `SetShown`, `AddTimedCooldown` |
 | **Hots** | Own-HoT icons (Lua-drawn out of combat, container in combat) | `Attach`, `SetUnit`, `Update`, `RefreshSizes`, `ShowPreview` |
 | **MissingBuffs** | Missing class-buff icon; `*spell-neobuff` attribute for the buff click | `Attach`, `Update`, `UpdateClick`, `ExplainClick` |
-| **ClickCast** | Bindings ↔ secure attributes, hover keys, auto-res snippet, class defaults | `Initialize`, `Set`, `BuildAttributes`, `Apply`, `ApplyToButton`, `QueueApply` |
+| **ClickCast** | Bindings ↔ secure attributes, hover keys, auto-res snippet, class defaults | `Initialize`, `Set`, `BuildAttributes`, `Apply`, `ApplyToButton`, `QueueApply`, `AddBindingsToTooltip`, `GetModifierPrefix` |
 | **UnitButton** | Visuals and per-unit event handling of one frame | `CreateVisuals`, `Init`, `UpdateAllButtons`, `UpdateAllAuras`, `RefreshAuraContainers` |
 | **Layout** | Container, 8 group headers + main tank + pet header, arrangement, titles, move mode, size presets, test mode | `Create`, `Refresh`, `Arrange`, `FitToContent`, `SetTestMode`, `GetSize` |
 | **Preview** | Fake members for test mode, using `UnitButton.CreateVisuals` | `Show`, `Hide` |
@@ -53,7 +53,7 @@ Layout:Create
             ├─ copy click attributes neoClickName/Value1..N onto the button
             └─ header:CallMethod("InitUnitButton") ──► UnitButton.Init (Lua)
                  ├─ CreateVisuals (bars, texts, icons, borders, Hots.Attach, MissingBuffs.Attach)
-                 ├─ hooks: OnEnter/OnLeave (tooltip), OnClick (debug), PostClick (buff explain)
+                 ├─ hooks: OnEnter/OnLeave (tooltip + bindings), OnClick (debug), PostClick (buff explain)
                  ├─ child frame `events` for unit events (no secure frame touched)
                  ├─ OnAttributeChanged "unit" ──► SetUnit
                  └─ RunOutOfCombat: RegisterForClicks, ApplyToButton (hover snippets),
@@ -122,10 +122,24 @@ charDB.bindings["shift-2"] = { action="spell", spellID=139, highestRank=true, ta
 
 - **Hover keys** use virtual buttons `neokey1..3`. The `_onenter` snippet calls
   `SetBindingClick` for the key with every modifier.
+- **Target and Open unit menu** keep the game's types (`target`, `togglemenu`)
+  only on plain left and right click. Everywhere else Blizzard's click bindings
+  would drop those types (see [forever-api.md](forever-api.md)), so the slot gets
+  `neotarget` or `neomenu`. A `neotarget` click goes through RES_SNIPPET to the
+  virtual button `neotarget`, `neotarget-target` or `neotarget-targettarget`
+  (following the slot's `unitsuffix`), each a `/target mouseover…` macro. For a
+  `neomenu` click the game calls `button.neomenu` (`ClickCast.OpenUnitMenu`, set
+  by `ApplyToButton`) outside secure code.
 - **RES_SNIPPET** wraps each button's `OnClick` in the secure environment. On a
   dead friendly unit it redirects spell/macro clicks to the virtual button
-  `neores`. For `neobuff` it returns `"neobuff"` (cast `*spell-neobuff`) or
-  `false` (cancel).
+  `neores`. It sends `neotarget` clicks to their `/target` macro, also on a dead
+  unit. For `neobuff` it returns `"neobuff"` (cast `*spell-neobuff`) or
+  `false` (cancel). It reads modifiers the way the game does, every one held as
+  `alt-ctrl-shift-` (like `ClickCast.GetModifierPrefix`), so with two held it
+  redirects nothing.
+- **The tooltip** (`ClickCast:AddBindingsToTooltip`) lists the bindings as last
+  applied to the frames (`appliedBindings` and `appliedHoverKeys`, set by
+  `Apply`), for the modifiers held now.
 - **Also target** turns the binding into a two-line macro using `mouseover`.
 
 ## Test mode

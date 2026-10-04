@@ -163,7 +163,7 @@ end
 local CLICK_SUFFIXES = { LeftButton = "1", RightButton = "2", MiddleButton = "3" }
 
 function MissingBuffs.ExplainClick(button, mouseButton)
-    local prefix = (IsShiftKeyDown() and "shift-") or (IsControlKeyDown() and "ctrl-") or (IsAltKeyDown() and "alt-") or ""
+    local prefix = NeoHeal.ClickCast.GetModifierPrefix()
     local suffix = CLICK_SUFFIXES[mouseButton] or mouseButton:match("^Button(%d+)$") or ("-" .. mouseButton)
     if button:GetAttribute(prefix .. "type" .. suffix) ~= "neobuff" then return end
 

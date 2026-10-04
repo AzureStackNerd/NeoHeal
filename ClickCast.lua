@@ -54,6 +54,19 @@ ClickCast.TARGETS = {
 -- the buff cast, or cancels the click.
 local ACTION_TYPES = { spell = "spell", target = "target", menu = "togglemenu", buff = "neobuff" }
 
+-- Blizzard's own click bindings (C_ClickBindings, see SecureUnitButton_OnClick)
+-- drop a click of type "target", "menu" or "togglemenu" unless they hold an
+-- Interaction binding for that button and modifiers. With Blizzard's default
+-- bindings those are only plain left click (Target) and plain right click (Open
+-- menu); this assumes those defaults. Everywhere else NeoHeal uses types of its
+-- own: "neotarget", which the click snippet turns into a /target macro, and
+-- "neomenu", which opens the menu from Lua (OpenUnitMenu).
+local FALLBACK_TYPES = { target = "neotarget", menu = "neomenu" }
+
+local function BlizzardLetsThrough(prefix, buttonId)
+    return prefix == "" and (buttonId == "1" or buttonId == "2")
+end
+
 -- Every binding key ("shift-2", "-neokey1", ...) and the attribute slots it owns.
 -- Slots without a binding are written as nil, which clears an old binding.
 local SLOTS = {}                -- [bindingKey] = { prefix = "shift-", buttonId = "2" }
@@ -84,15 +97,27 @@ table.insert(ClickCast.ATTRIBUTE_NAMES, "*spell-neores")
 -- Buffing (MissingBuffs.lua): the spell attribute is set per button, the type here.
 table.insert(ClickCast.ATTRIBUTE_NAMES, "*type-neobuff")
 
+-- "neotarget": one virtual button per "Cast on" choice, each with its /target
+-- macro; the click snippet picks the one the clicked binding needs.
+local function TargetButton(target)
+    return target == "unit" and "neotarget" or ("neotarget-" .. target)
+end
+for _, choice in ipairs(ClickCast.TARGETS) do
+    table.insert(ClickCast.ATTRIBUTE_NAMES, "*type-" .. TargetButton(choice.value))
+    table.insert(ClickCast.ATTRIBUTE_NAMES, "*macrotext-" .. TargetButton(choice.value))
+end
+
 -- Runs in the secure environment (no access to addon Lua) before every click.
 -- Returning a button name makes the click use that button's attributes instead.
 ClickCast.RES_SNIPPET = [[
     local unit = self:GetAttribute("unit")
     if not unit then return end
 
-    -- Find out what this click would do.
-    local prefix = (IsShiftKeyDown() and "shift-") or (IsControlKeyDown() and "ctrl-")
-                or (IsAltKeyDown() and "alt-") or ""
+    -- Find out what this click would do, with the game's own prefix: every modifier
+    -- held, as "alt-ctrl-shift-" (ClickCast.GetModifierPrefix, which can't be called
+    -- from here). Two at once match no binding, so such a click does nothing.
+    local prefix = (IsAltKeyDown() and "alt-" or "") .. (IsControlKeyDown() and "ctrl-" or "")
+                .. (IsShiftKeyDown() and "shift-" or "")
     local suffix = (button == "LeftButton" and "1") or (button == "RightButton" and "2")
                 or (button == "MiddleButton" and "3") or strmatch(button, "^Button(%d+)$")
                 or ("-" .. button)
@@ -107,6 +132,13 @@ ClickCast.RES_SNIPPET = [[
             return "neobuff"
         end
         return false
+    end
+
+    -- "Target" where Blizzard's click bindings would drop the click: the virtual
+    -- button with the /target macro for its "Cast on" choice. Also on a dead unit.
+    if action == "neotarget" then
+        local target = self:GetAttribute(prefix .. "unitsuffix" .. suffix)
+        return target and ("neotarget-" .. target) or "neotarget"
     end
 
     -- A cast on a dead friendly unit becomes the res.
@@ -325,7 +357,11 @@ function ClickCast:BuildAttributes()
                 attributes[prefix .. "type" .. buttonId] = "macro"
                 attributes[prefix .. "macrotext" .. buttonId] = self:BuildTargetingMacro(binding)
             else
-                attributes[prefix .. "type" .. buttonId] = ACTION_TYPES[binding.action]
+                local actionType = ACTION_TYPES[binding.action]
+                if FALLBACK_TYPES[binding.action] and not BlizzardLetsThrough(prefix, buttonId) then
+                    actionType = FALLBACK_TYPES[binding.action]
+                end
+                attributes[prefix .. "type" .. buttonId] = actionType
                 if binding.action == "spell" then
                     attributes[prefix .. "spell" .. buttonId] = self:GetSpellValue(binding)
                 end
@@ -342,6 +378,11 @@ function ClickCast:BuildAttributes()
         attributes["*spell-neores"] = resSpell
     end
     attributes["*type-neobuff"] = "spell"
+    for _, choice in ipairs(self.TARGETS) do
+        local virtualButton = TargetButton(choice.value)
+        attributes["*type-" .. virtualButton] = "macro"
+        attributes["*macrotext-" .. virtualButton] = "/target mouseover" .. (choice.value ~= "unit" and choice.value or "")
+    end
 
     local hoverSnippet = self:BuildHoverKeySnippet()
     if hoverSnippet then
@@ -370,6 +411,10 @@ function ClickCast:Apply()
     end
 
     self.attributes = attributes
+    -- What the frames do now, for the tooltip: a binding changed in combat only
+    -- takes effect when combat ends, and the tooltip waits for it too.
+    self.appliedBindings = CopyTable(NeoHeal.charDB.bindings)
+    self.appliedHoverKeys = CopyTable(NeoHeal.charDB.hoverKeys)
     for button in pairs(NeoHeal.UnitButton.buttons) do
         self:ApplyToButton(button)
     end
@@ -381,6 +426,7 @@ end
 function ClickCast:ApplyToButton(button)
     local attributes = self.attributes
     if not attributes then return end
+    button.neomenu = ClickCast.OpenUnitMenu   -- what a "neomenu" click calls
     for _, name in ipairs(self.ATTRIBUTE_NAMES) do
         button:SetAttribute(name, attributes[name])
     end
@@ -391,4 +437,99 @@ end
 
 function ClickCast:QueueApply()
     NeoHeal:RunOutOfCombat("applyBindings", function() self:Apply() end)
+end
+
+---------------------------------------------------------------------------
+-- "Open unit menu" where Blizzard's click bindings would drop the click (type
+-- "neomenu"): the game then calls the button's neomenu function, outside secure
+-- code. It opens the menu Blizzard's togglemenu would open; an entry in it that
+-- needs secure code, such as Set Focus, may be blocked from here.
+---------------------------------------------------------------------------
+local MENUS_BY_UNIT_TYPE = { player = "SELF", party = "PARTY", raid = "RAID_PLAYER", pet = "PET",
+                             partypet = "OTHERPET", raidpet = "OTHERPET" }
+
+function ClickCast.OpenUnitMenu(frame, unit)
+    -- Blizzard's menu click cancels a spell waiting for a target instead of opening
+    -- the menu. SpellStopTargeting may be protected (not checked), so here the
+    -- click just doesn't open the menu while a spell waits.
+    if not unit or SpellIsTargeting() then return end
+    unit = unit:lower()
+    local unitType = unit:match("^([a-z]+)%d+$") or unit
+    local which = MENUS_BY_UNIT_TYPE[unitType]
+    -- In a raid you and your pet are raid units too. On maps where the game
+    -- restricts addons the answer can be secret; then you get the raid member or
+    -- other pet menu instead of an error.
+    if unitType == "raid" and NeoHeal.IsTrue(UnitIsUnit(unit, "player")) then
+        which = "SELF"
+    elseif unitType == "raidpet" and NeoHeal.IsTrue(UnitIsUnit(unit, "pet")) then
+        which = "PET"
+    end
+    if which then UnitPopup_OpenMenu(which, { ownerFrame = frame, unit = unit }) end
+end
+
+---------------------------------------------------------------------------
+-- Tooltip: what each bound button does with the modifiers held right now,
+-- added under the unit tooltip (UnitButton.lua).
+---------------------------------------------------------------------------
+local TOOLTIP_TITLE_COLOR = { 1, 0.82, 0 }   -- the game's gold
+local TOOLTIP_LABEL_COLOR = { 0.7, 0.7, 0.7 }
+local TOOLTIP_TEXT_COLOR = { 1, 1, 1 }
+
+-- The prefix the game puts before a click's attribute names: every modifier held,
+-- as "alt-ctrl-shift-" (SecureButton_GetModifierPrefix). With two or more held
+-- it matches no binding here, so the click does nothing; RES_SNIPPET builds the
+-- same prefix, so it doesn't redirect such a click to the res or a buff either.
+function ClickCast.GetModifierPrefix()
+    return (IsAltKeyDown() and "alt-" or "") .. (IsControlKeyDown() and "ctrl-" or "")
+        .. (IsShiftKeyDown() and "shift-" or "")
+end
+
+local TARGET_LABELS = {}   -- [target value] = label
+for _, choice in ipairs(ClickCast.TARGETS) do TARGET_LABELS[choice.value] = choice.label end
+
+-- "Flash Heal", or "Flash Heal (Unit's target)" when it doesn't go to the clicked unit.
+local function DescribeForTooltip(binding)
+    local text = ClickCast:Describe(binding)
+    local target = binding.action ~= "menu" and binding.action ~= "buff" and binding.target
+    if target and target ~= "unit" then
+        text = format("%s (%s)", text, TARGET_LABELS[target] or target)
+    end
+    return text
+end
+
+-- One line per bound button ("Left click    Flash Heal") for the modifiers held
+-- now, under a "Shift" title while one is held; nothing when nothing is bound for
+-- them. A hover key shows once it has a key: without one it can't be pressed.
+-- Shows the bindings last applied to the frames (Apply), not edits still waiting
+-- for combat to end.
+function ClickCast:AddBindingsToTooltip(tooltip)
+    local bindings = self.appliedBindings or NeoHeal.charDB.bindings
+    local hoverKeys = self.appliedHoverKeys or NeoHeal.charDB.hoverKeys
+    local prefix = ClickCast.GetModifierPrefix()
+    local lines = {}
+    for _, button in ipairs(self.BUTTONS) do
+        local binding = bindings[prefix .. button.id]
+        local label = button.label
+        if button.hoverKey then
+            local key = hoverKeys[button.hoverKey]
+            label = key and format(L.HOVER_KEY, key)
+        end
+        if binding and label then
+            table.insert(lines, { label, DescribeForTooltip(binding) })
+        end
+    end
+    if #lines == 0 then return end
+
+    tooltip:AddLine(" ")
+    for _, modifier in ipairs(self.MODIFIERS) do
+        if prefix ~= "" and modifier.prefix == prefix then
+            local color = TOOLTIP_TITLE_COLOR
+            tooltip:AddLine(modifier.label, color[1], color[2], color[3])
+        end
+    end
+    local labelColor, textColor = TOOLTIP_LABEL_COLOR, TOOLTIP_TEXT_COLOR
+    for _, line in ipairs(lines) do
+        tooltip:AddDoubleLine(line[1], line[2], labelColor[1], labelColor[2], labelColor[3],
+            textColor[1], textColor[2], textColor[3])
+    end
 end

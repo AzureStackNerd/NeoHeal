@@ -63,8 +63,15 @@ to clear).
 Actions:
 
 - **None**
-- **Target**
-- **Open unit menu**
+- **Target** and **Open unit menu**. On plain left and right click these are the
+  game's own. Anywhere else (with a modifier, on middle click or buttons 4/5, or
+  on a hover key) Blizzard's click bindings would drop them, so NeoHeal does them
+  itself:
+  - Target becomes a `/target` macro, so a spell waiting for a target isn't cast
+    on the clicked unit.
+  - NeoHeal opens the menu itself. An entry that needs Blizzard's secure code,
+    such as Set Focus, may be blocked, and no menu opens while a spell waits for
+    a target.
 - **Cast missing buff**: casts the buff whose icon shows on that frame. In a raid
   it uses the group version if you know it and carry the reagent. Out of combat
   only, and not during a ready check. Otherwise the click does nothing and
@@ -79,12 +86,27 @@ Per binding:
 - **Cast on**: the clicked unit, its target, or its target's target.
 - **Also target**: cast *and* target the unit in one click (spells only).
 
+**Tooltip:** hovering a frame shows the unit tooltip with your bindings below
+it: one line per bound button, such as "Left click — Flash Heal", including
+middle click, buttons 4/5 and hover keys that have a key. Hold Shift, Ctrl or
+Alt and the tooltip switches to that modifier's bindings, under its name. Holding
+two modifiers at once shows none, because such a click does nothing, not even a
+res or a missing buff. Bindings that don't go to the clicked unit name their
+target, e.g. "Flash Heal (Unit's target)". The tooltip shows the bindings as
+they work right now: a binding you change in combat appears once it takes
+effect, when combat ends. One thing it doesn't show: on a dead friendly member a
+spell click casts your res instead (see Auto-resurrect), while the tooltip still
+lists the spells. The "Show tooltips" option switches the whole tooltip off.
+
 **Auto-resurrect:** a spell click on a dead friendly member casts your res
 spell instead (Priest Resurrection, Paladin Redemption, Shaman Ancestral Spirit,
 Druid Rebirth). Target and menu clicks keep working.
 
-**Reset to class defaults** restores the starting bindings: left = Target,
-right = menu, plus the class's main heals and cures where learned.
+**Reset to class defaults** restores the starting bindings: Ctrl+left = Target
+and Ctrl+right = menu, plus the class's main heals and cures where learned.
+Plain left and right click start as Target and menu too, unless a class heal
+takes them: left click for Priest, Druid, Paladin and Shaman, right click for
+Priest and Druid.
 
 ## Layout options (account-wide)
 

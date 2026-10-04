@@ -11,6 +11,7 @@ Docs live in `docs/`: start with `docs/forever-api.md` (client rules) and `docs/
 - **Combat lockdown:** anything touching a secure frame (unit buttons, group headers, their attributes, anything anchored to them) goes through `NeoHeal:RunOutOfCombat(key, func)`.
 - **Secret values:** API results such as health, auras in combat, `UnitIsUnit`, range and raid marker index may be secret. Never test, compare or do arithmetic on them. Use `NeoHeal.IsSecret / IsTrue / IsFalse`, curves (`C_CurveUtil`), `SetAlphaFromBoolean`, or pass them straight to a widget.
 - **Auras in combat** can only be shown through `AuraContainer.lua` (Blizzard-drawn, filter-based). Never create or enable a container in combat.
+- **Click types `target`, `menu`, `togglemenu`** only work on plain left/right click: Blizzard's click bindings drop them elsewhere. Use `neotarget` / `neomenu` there (`docs/forever-api.md`, section 4).
 - Guard new events with `C_EventUtils.IsEventValid` (see `Core.lua`).
 - New settings: a default in `Core.lua` `DEFAULTS`, a string in `Locales/enUS.lua`, a row in `LAYOUT_SETTINGS` (`Options.lua`). Make test mode (`Preview.lua`) show it too.
 - Renamed or reshaped settings need a migration in `NeoHeal:PLAYER_LOGIN`.

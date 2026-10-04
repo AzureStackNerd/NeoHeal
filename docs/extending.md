@@ -57,7 +57,9 @@ then group version), `group`, `reagent`, and optionally `manaOnly`.
 ## Add a click action
 
 1. Add a value to `ACTION_TYPES` in `ClickCast.lua` (the secure `type`
-   attribute it becomes).
+   attribute it becomes). A type of `target`, `menu` or `togglemenu` also needs
+   a `FALLBACK_TYPES` entry: Blizzard's click bindings drop those types except on
+   plain left and right click ([forever-api.md](forever-api.md), section 4).
 2. Handle it in `BuildAttributes`, in `Describe`, and in the action menu
    (`BuildActionMenu` in `Options.lua`). If "Cast on" doesn't apply, also update
    the target dropdown's enabled check in `CreateBindingRow`.
@@ -101,12 +103,16 @@ nothing else: LuaUnit is included as `spec/luaunit.lua`. The game never loads
 - `spec/support.lua` fakes the parts of the game API the tested files need,
   including a small spellbook (Flash Heal ranks 1–7, and Abolish Disease, which
   has no rank). `Support.Load({ files })` loads addon files into a fresh namespace.
-- One `*_test.lua` per module, listed in `spec/run.lua`.
+- One `*_test.lua` per module or feature, listed in `spec/run.lua`.
 - Covered now: spell ranks, click-cast bindings, the row text, macros, event
-  wiring, and the options window's click-casting menu. `spec/options_test.lua`
-  builds the real window on fake frames that record each dropdown's menu builder,
-  so a test can click through a menu. Not covered: the unit frames and the
-  layout. Anything that depends on the real client stays on the checklist below.
+  wiring, the tooltip (hovering, the binding lines, the switch when a modifier
+  changes), clicks with modifiers (`RES_SNIPPET` runs as plain Lua with fakes for
+  the secure environment), and the options window's click-casting menu.
+  `spec/options_test.lua` builds the real window on fake frames that record each
+  dropdown's menu builder, so a test can click through a menu. Fake frames from
+  `CreateFrame` keep their scripts and events, so a test can fire an event at
+  them. Not covered: how the unit frames look, and the layout. Anything that
+  depends on the real client stays on the checklist below.
 - Before trusting a new test, break the code it covers in a copy of the addon
   and check that the test fails.
 

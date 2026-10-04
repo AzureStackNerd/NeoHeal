@@ -64,7 +64,9 @@ Patterns used across the code:
   for range fading and target borders.
 - **`pcall` around experiments** that may be refused on some builds, e.g.
   putting a secret amount on the incoming-heal bar.
-- Known-secret data: health, aura data (in combat), `UnitIsUnit` (in combat),
+- Known-secret data: health, aura data (in combat), `UnitIsUnit` (on maps where
+  the game restricts addons; there always for compound tokens such as
+  `targettarget`),
   `UnitInRange`, raid target index (**always**, even out of combat;
   `SetRaidTargetIconTexture` still accepts it), sometimes roles and classes.
 
@@ -96,6 +98,27 @@ of 30s or less (a known limitation: Spirit Tap shows on your own frame).
 The dispel strip is a single aura slot whose dispel-type texture is coloured by
 a step colour curve (`Dispel:GetColorCurve`). Types you can't remove map to
 transparent. The technique comes from Decursive.
+
+## 4. Blizzard's click bindings can drop Target and Menu clicks
+
+Forever has Blizzard's own click-binding system (`C_ClickBindings`, the Click
+Casting window: `/run ToggleClickBindingFrame()`). In `SecureUnitButton_OnClick`
+(`Blizzard_FrameXML/SecureTemplates.lua`), a click whose type is `target`, `menu`
+or `togglemenu` only goes through if that system holds an *Interaction* binding
+for the same mouse button and modifiers. With Blizzard's default bindings those
+are only plain left click (Target) and plain right click (Open menu). Every other
+click with these types is dropped silently, including clicks from hover keys.
+
+NeoHeal therefore uses the game's types only on plain left and right click, and
+its own `neotarget` / `neomenu` everywhere else. See "Click casting data flow" in
+[architecture.md](architecture.md). This assumes Blizzard's defaults. If you
+rebind Target or Open menu in the Click Casting window, plain left/right Target
+or Menu can be dropped too. A spell, macro or pet action bound there runs
+instead of what NeoHeal binds on that button and modifiers. The exception is a
+click the click snippet redirects: Target off plain left and right click, Cast
+missing buff, and the res on a dead member. That click reaches Blizzard's check
+under NeoHeal's own virtual button name, which Blizzard's bindings don't cover.
+This follows from the source and hasn't been checked in the game.
 
 ## Checklist before shipping a change
 
