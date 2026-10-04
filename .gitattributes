@@ -1,0 +1,7 @@
+# Left out of the release ZIP (git archive, see docs/curseforge.md): players
+# only need the .toc, the .lua files, Locales/ and LICENSE.
+/docs export-ignore
+/spec export-ignore
+/CLAUDE.md export-ignore
+/.gitignore export-ignore
+/.gitattributes export-ignore
