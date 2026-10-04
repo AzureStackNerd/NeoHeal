@@ -2,7 +2,7 @@
 
 NeoHeal is a small click-cast raid frame addon for party and raid healing on
 **WoW: Forever** (the Classic-era game running on the retail 12.x client API).
-Interface version `16001`, addon version `0.3.0`.
+Interface version `16001`, addon version `0.4.0`.
 
 | Document | For whom | What's in it |
 | --- | --- | --- |

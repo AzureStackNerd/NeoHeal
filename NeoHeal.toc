@@ -2,7 +2,7 @@
 ## Title: NeoHeal
 ## Notes: Small click-cast raid frames for party and raid healing.
 ## Author: neoGore
-## Version: 0.3.0
+## Version: 0.4.0
 ## IconTexture: Interface\Icons\Spell_Holy_FlashHeal
 ## SavedVariables: NeoHealDB
 ## SavedVariablesPerCharacter: NeoHealCharDB

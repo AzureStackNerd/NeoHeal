@@ -3,6 +3,9 @@
 Everything needed to publish NeoHeal on CurseForge: the project fields, the text
 to paste, and how to build the release ZIP.
 
+The project: <https://www.curseforge.com/wow/addons/neoheal>, approved on
+2026-10-04 with version 0.3.0.
+
 Requirements as found on 2026-10-04:
 
 - The project name is unique and holds no game name, version or category.
@@ -18,7 +21,7 @@ Requirements as found on 2026-10-04:
 
 | Field | Value |
 | --- | --- |
-| Game | World of Warcraft (shown as "World of Warcraft Midnight" in the Author Console, the only WoW entry). Forever isn't a separate game: it's chosen per file, see [First file](#first-file). |
+| Game | World of Warcraft (shown as "World of Warcraft Midnight" in the Author Console, the only WoW entry). Forever isn't a separate game: it's chosen per file, see [Uploading a file](#uploading-a-file). |
 | Name | NeoHeal |
 | Summary | See [Summary](#summary) |
 | Description | See [Description](#description). Switch the editor to Markdown first: it starts in WYSIWYG, where `##` and `-` show as plain text. |
@@ -45,9 +48,11 @@ NeoHeal is a small set of party and raid frames for healers on WoW: Forever. Bin
 - Target, open the unit menu, or cast the raid buff a member is missing (Priest, Druid and Mage).
 - Priests, Paladins, Shamans and Druids: a spell click on a dead group member casts your resurrection instead (Rebirth for Druids).
 
-## A tooltip that tells you what a click does
+## See what a click does
 
 Hover a frame to see your bindings, and hold Shift, Ctrl or Alt to see that modifier's bindings. Each heal or shield shows how much the rank you cast heals or absorbs, for example "Healing Wave 237-280" or "942 absorb".
+
+The frame under your mouse also shows how much your left click would heal: a lighter bar right after the incoming heals, which follows Shift, Ctrl and Alt too.
 
 ## Frames
 
@@ -61,20 +66,31 @@ Hover a frame to see your bindings, and hold Shift, Ctrl or Alt to see that modi
 
 Type /neoheal. Test mode shows a fake group of 5, 10, 25 or 40 players, so you can tune the look and layout without a raid.
 
+Does a click cast something other than you bound? Check the game's own Click Casting window (/run ToggleClickBindingFrame()): a spell bound there on the same button and modifiers wins over NeoHeal's binding.
+
 Made for WoW: Forever (Interface 16001). The heal amounts are read from the spell descriptions of an English client.
 
 NOTE: Inspired by HealBot which I loved to use for a long time
 ```
 
-## First file
+## Uploading a file
 
 | Field | Value |
 | --- | --- |
-| File | `NeoHeal-0.3.0.zip` (see [Building the ZIP](#building-the-zip)) |
+| File | `NeoHeal-<version>.zip` (see [Building the ZIP](#building-the-zip)) |
 | Release type | Release |
 | Game version | Only Forever (1.60.1); no Retail or Classic. This tag decides which installs the CurseForge app offers the file to. CurseForge doesn't check it against the `.toc` (`## Interface: 16001`), so keep the two in line. |
 
-Changelog (Markdown, like the description):
+The changelog per file, in Markdown like the description.
+
+### 0.4.0
+
+```markdown
+- Heal prediction: the frame under your mouse shows how much your left click would heal, as a lighter bar after the incoming heals. It follows Shift, Ctrl and Alt, and "Show left-click heal prediction" (Layout) turns it off.
+- Tip: if a click casts something other than you bound, check the game's own Click Casting window (/run ToggleClickBindingFrame()). A spell bound there wins over NeoHeal's binding.
+```
+
+### 0.3.0
 
 ```markdown
 First release on CurseForge.
@@ -94,8 +110,8 @@ the AddOns folder:
 
 ```sh
 git commit ...                      # the version in NeoHeal.toc and everything else
-git tag v0.3.0
-git archive --format=zip --prefix=NeoHeal/ -o "<outside the repo>/NeoHeal-0.3.0.zip" v0.3.0
+git tag v<version>
+git archive --format=zip --prefix=NeoHeal/ -o "<outside the repo>/NeoHeal-<version>.zip" v<version>
 ```
 
 Before uploading, list the ZIP's contents and check the version in its
