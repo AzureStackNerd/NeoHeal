@@ -1,5 +1,16 @@
 # Features
 
+## Screenshots
+
+Test mode with 5 players, with the Layout page of the options:
+
+![Test mode with 5 players and the Layout options](images/Party5Options.png)
+
+Test mode with 40 players: eight groups and the main tank group, health colors
+from green to red, and the raid size preset:
+
+![Test mode with 40 players and the Layout options](images/Test40Options.png)
+
 ## Opening the options
 
 - `/neoheal` opens or closes the options window (Escape closes it too).
