@@ -549,8 +549,9 @@ end
 -- to hit, before any aggro shows. It shares the spot with the white border without
 -- clashing: while you target an enemy, no raid member is your target.
 --
--- Both use UnitIsUnit, which the game may hide (secret) in combat. A secret answer
--- can't be tested, but SetAlphaFromBoolean lets the game apply it to the border.
+-- Both use UnitIsUnit, which the game may hide (secret) on maps where it restricts
+-- addons, there always for "targettarget". A secret answer can't be tested, but
+-- SetAlphaFromBoolean lets the game apply it to the border.
 local function ShowIfSameUnit(border, unit, otherUnit)
     local same = UnitIsUnit(unit, otherUnit)
     if IsSecret(same) and border.SetAlphaFromBoolean then
@@ -908,19 +909,57 @@ end
 ---------------------------------------------------------------------------
 -- Decorating a new secure button
 ---------------------------------------------------------------------------
+-- The tooltip: the game's unit tooltip, with the click bindings for the modifiers
+-- held right now below it (ClickCast:AddBindingsToTooltip). The game rebuilds a
+-- unit tooltip by itself when the unit's data changes, which drops lines added
+-- once, so where it can, a post-call adds them to every build of a tooltip owned
+-- by one of our buttons.
+local bindingsByPostCall = TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall
+    and Enum.TooltipDataType and true or false
+
+if bindingsByPostCall then
+    TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Unit, function(tooltip)
+        if tooltip == GameTooltip and UnitButton.buttons[tooltip:GetOwner()] then
+            NeoHeal.ClickCast:AddBindingsToTooltip(tooltip)
+        end
+    end)
+end
+
+local function ShowTooltip(button)
+    GameTooltip_SetDefaultAnchor(GameTooltip, button)
+    GameTooltip:SetUnit(button.unit)
+    if not bindingsByPostCall then NeoHeal.ClickCast:AddBindingsToTooltip(GameTooltip) end
+    GameTooltip:Show()
+end
+
+-- Pressing or releasing a modifier over a button rebuilds its tooltip, so it shows
+-- that modifier's bindings. Listens only while a tooltip shows.
+local MODIFIER_EVENT = "MODIFIER_STATE_CHANGED"
+local canWatchModifiers = not C_EventUtils or C_EventUtils.IsEventValid(MODIFIER_EVENT)
+local tooltipWatcher = CreateFrame("Frame")
+tooltipWatcher:SetScript("OnEvent", function(self)
+    local button = self.button
+    if button and button.unit and GameTooltip:IsOwned(button) then ShowTooltip(button) end
+end)
+
 local function OnEnter(button)
     button.highlight:Show()
     if NeoHeal.db.layout.showTooltips and button.unit then
-        GameTooltip_SetDefaultAnchor(GameTooltip, button)
-        GameTooltip:SetUnit(button.unit)
-        GameTooltip:Show()
+        ShowTooltip(button)
+        tooltipWatcher.button = button
+        if canWatchModifiers then tooltipWatcher:RegisterEvent(MODIFIER_EVENT) end
     end
 end
 
 local function OnLeave(button)
     button.highlight:Hide()
+    if tooltipWatcher.button == button then
+        if canWatchModifiers then tooltipWatcher:UnregisterEvent(MODIFIER_EVENT) end
+        tooltipWatcher.button = nil
+    end
     if GameTooltip:IsOwned(button) then GameTooltip:Hide() end
 end
+UnitButton.OnEnter, UnitButton.OnLeave = OnEnter, OnLeave   -- the tests use them
 
 -- /neoheal clicks: prints every click on a unit button (which mouse button arrived
 -- and what that button is bound to), to find out why a binding doesn't fire.
@@ -930,7 +969,7 @@ local CLICK_SUFFIXES = { LeftButton = "1", RightButton = "2", MiddleButton = "3"
 
 function UnitButton.PrintClick(button, mouseButton)
     if not UnitButton.debugClicks then return end
-    local prefix = (IsShiftKeyDown() and "shift-") or (IsControlKeyDown() and "ctrl-") or (IsAltKeyDown() and "alt-") or ""
+    local prefix = NeoHeal.ClickCast.GetModifierPrefix()
     local suffix = CLICK_SUFFIXES[mouseButton] or mouseButton:match("^Button(%d+)$") or ("-" .. mouseButton)
     local actionType = button:GetAttribute(prefix .. "type" .. suffix)
     NeoHeal:Print(format("click: %s%s on %s -> type = %s, spell = %s", prefix, tostring(mouseButton),

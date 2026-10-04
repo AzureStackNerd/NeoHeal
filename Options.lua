@@ -239,7 +239,8 @@ function Options:RefreshLayoutPage()
 end
 
 -- The action menu: None / Target / Menu, then spells grouped by spellbook tab.
--- Spells with several ranks get a submenu: "Highest rank", "Rank 1", "Rank 2", ...
+-- Spells with several ranks get a submenu: "Highest rank", "Highest rank -1",
+-- "Rank 1", "Rank 2", ...
 local function BuildActionMenu(root, key)
     -- Keep the row's "cast on" and "also target" choices when switching spells.
     local current = ClickCast:Get(key)
@@ -250,8 +251,10 @@ local function BuildActionMenu(root, key)
         ClickCast:Set(key, binding)
         Options:RefreshBindingRows()
     end
-    local function SpellBinding(spellID, highestRank)
-        return { action = "spell", spellID = spellID, highestRank = highestRank, target = target, alsoTarget = alsoTarget }
+    -- rankOffset: with highestRank, how many ranks below the highest to cast.
+    local function SpellBinding(spellID, highestRank, rankOffset)
+        return { action = "spell", spellID = spellID, highestRank = highestRank, rankOffset = rankOffset,
+                 target = target, alsoTarget = alsoTarget }
     end
 
     root:CreateButton(L.ACTION_NONE, function() Choose(nil) end)
@@ -274,6 +277,9 @@ local function BuildActionMenu(root, key)
             else
                 local spellMenu = lineMenu:CreateButton(spell.name)
                 spellMenu:CreateButton(L.HIGHEST_RANK, function() Choose(SpellBinding(highest, true)) end)
+                -- Saved as that rank, so it is also what gets cast should the lookup fail.
+                local belowHighest = spell.ranks[#spell.ranks - 1].spellID
+                spellMenu:CreateButton(L.HIGHEST_RANK_MINUS_ONE, function() Choose(SpellBinding(belowHighest, true, 1)) end)
                 for _, rank in ipairs(spell.ranks) do
                     spellMenu:CreateButton(rank.text, function() Choose(SpellBinding(rank.spellID, false)) end)
                 end
@@ -412,7 +418,14 @@ local function CreateClickCastingPage(frame)
     reset:SetPoint("BOTTOMLEFT")
 
     function page:Refresh() Options:RefreshBindingRows() end
+    Options.clickCastingPage = page
     return page
+end
+
+-- After the spellbook changed: a row may name another rank, or no longer say
+-- "not learned". Only while the page shows; it refreshes itself when shown.
+function Options:RefreshClickCastingPage()
+    if self.clickCastingPage and self.clickCastingPage:IsVisible() then self.clickCastingPage:Refresh() end
 end
 
 function Options:RefreshBindingRows()

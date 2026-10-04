@@ -70,13 +70,21 @@ function Spells:GetEntry(spellID)
 end
 
 -- The highest rank of this spell that the player knows, or nil if it isn't in the spellbook.
-function Spells:GetHighestRank(spellID)
+-- `offset` counts down from there ("highest rank -1" is 1); it stops at rank 1.
+function Spells:GetHighestRank(spellID, offset)
     local entry = self:GetEntry(spellID)
-    return entry and entry.ranks[#entry.ranks].spellID
+    return entry and entry.ranks[math.max(1, #entry.ranks - (offset or 0))].spellID
 end
 
--- "Rank 3" for ranked spells, nil otherwise.
+-- "Rank 3" for ranked spells, nil otherwise. The text the scan stored comes first:
+-- it is what the options menu shows, so a macro names exactly that rank.
 function Spells:GetRankText(spellID)
+    local entry = self:GetEntry(spellID)
+    for _, rank in ipairs(entry and entry.ranks or {}) do
+        if rank.spellID == spellID then
+            return rank.number > 0 and rank.text or nil
+        end
+    end
     local number, text = ParseRank(spellID)
     return number > 0 and text or nil
 end

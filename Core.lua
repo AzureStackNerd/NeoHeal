@@ -229,6 +229,7 @@ function NeoHeal:SPELLS_CHANGED()
         self.MissingBuffs:UpdateKnownBuffs()
         self.UnitButton:UpdateAllButtons()
         self.ClickCast:QueueApply()   -- "highest rank" bindings may now resolve to a new rank
+        self.Options:RefreshClickCastingPage()   -- and the rows should say so
         self:RunOutOfCombat("dispelContainers", function()
             self.UnitButton:RefreshAuraContainers()   -- a first dispel spell may be learned
         end)
