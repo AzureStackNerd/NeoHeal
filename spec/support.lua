@@ -113,6 +113,7 @@ local function InstallGlobals()
     -- Set by single tests (spec/prediction_test.lua); gone again for the next.
     UnitGetIncomingHeals, UnitGetTotalAbsorbs, C_UnitAuras = nil, nil, nil
     SpellIsTargeting = function() return false end   -- no spell waiting for a target
+    GetBindingAction = function() return "" end       -- no key bound until a test binds one
 
     -- Messages at the top of the screen are kept in Support.errorMessages.
     Support.errorMessages = {}

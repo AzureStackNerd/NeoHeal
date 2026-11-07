@@ -150,6 +150,27 @@ secret, so `UnitGetIncomingHeals` gave a secret there. During the cast that bar
 showed the heal (seen in game on 2026-10-04), so a shown bar at 0 does shrink,
 and skipping hidden bars is enough.
 
+## 6. A hover key on a movement key kept the character walking
+
+Seen in the game on 2026-11-07 (0.4.0): a character had W, which walks forward,
+as hover key 1 without an action on it. Walking with W while the mouse was over
+a NeoHeal frame left the character walking on, as with autorun. Without the
+mouse on a frame, W walked normally. While the mouse is on a frame, the
+`_onenter` snippet binds the hover key to a click on that frame. Why the walk
+didn't stop isn't checked; the likely reason is that the key's release went to
+that click binding instead of to walking forward. Blizzard's
+`Bindings_Standard.xml` marks the movement bindings that start on key down and
+stop on key up with `runOnUp="true"`.
+
+NeoHeal therefore binds a hover key only while it has an action and its key
+isn't bound to one of those held movement bindings
+(`ClickCast.MovesTheCharacter`, which reads `GetBindingAction`). The key
+capture refuses such a key, and `UPDATE_BINDINGS` re-checks after a key
+binding change. The wiki says that event fires after `LoadBindings`,
+`SaveBindings` and `SetBinding`; whether NeoHeal's own temporary hover
+bindings fire it too isn't known, and `CheckHoverKeys` re-applies nothing for
+them either way. None of this has been checked in the game yet.
+
 ## Checklist before shipping a change
 
 - [ ] Does it touch a secure frame or attribute? → `RunOutOfCombat`.

@@ -71,7 +71,13 @@ blessings are left out on purpose.
 Pick a modifier (none, Shift, Ctrl, Alt), then choose per mouse button what a
 click does. Five mouse buttons plus three **hover keys**: keyboard keys that
 "click" the frame under the mouse (left click the key button to set, right click
-to clear).
+to clear). A hover key only takes its key over while it has an action on at
+least one modifier. Setting a hover key refuses a key that moves your character
+(forward, back, turn, strafe, jump, sit or descend, pitch, mouse steer): it says
+so in red and waits for another key. A hover key that moves you anyway (set
+before this check, or bound to movement in the game's key bindings since) keeps
+its action but isn't bound: the tooltip leaves it out, and its button reads
+"W (moves you)". Unbind the movement and it works again.
 
 Actions:
 

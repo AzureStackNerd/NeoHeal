@@ -116,9 +116,12 @@ nothing else: LuaUnit is included as `spec/luaunit.lua`. The game never loads
   auras, and where each bar is anchored; `Support.FakeBar` records a bar and
   `Support.FakeButton` holds a button's bars), clicks
   with modifiers (`RES_SNIPPET` runs as plain Lua with fakes for the secure
-  environment), and the options window's click-casting menu.
-  `spec/options_test.lua` builds the real window on fake frames that record each
-  dropdown's menu builder, so a test can click through a menu. Fake frames from
+  environment), which keys the hover-key snippet takes over, which keys count
+  as movement and the re-check after a key binding change, and the options
+  window's click-casting menu and key capture. `spec/options_test.lua` builds
+  the real window on fake frames that keep their scripts, keyboard state and
+  text, and record each dropdown's menu builder and each key-capture button, so
+  a test can click through a menu or press a key. Fake frames from
   `CreateFrame` keep their scripts and events, so a test can fire an event at
   them. Not covered: how the unit frames look, and the layout. Anything that
   depends on the real client stays on the checklist below.

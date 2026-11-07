@@ -26,7 +26,7 @@ Locales/enUS.lua → Core → Spells → Dispel → AuraContainer → Hots → M
 | **AuraContainer** | Wrapper around Blizzard's `CustomAuraContainerTemplate`; the shared countdown font | `Create`, `CreateDispelStrip`, `SetUnit`, `SetShown`, `AddTimedCooldown` |
 | **Hots** | Own-HoT icons (Lua-drawn out of combat, container in combat) | `Attach`, `SetUnit`, `Update`, `RefreshSizes`, `ShowPreview` |
 | **MissingBuffs** | Missing class-buff icon; `*spell-neobuff` attribute for the buff click | `Attach`, `Update`, `UpdateClick`, `ExplainClick` |
-| **ClickCast** | Bindings ↔ secure attributes, hover keys, auto-res snippet, class defaults | `Initialize`, `Set`, `BuildAttributes`, `Apply`, `ApplyToButton`, `QueueApply`, `AddBindingsToTooltip`, `GetModifierPrefix`, `GetLeftClickAmount` |
+| **ClickCast** | Bindings ↔ secure attributes, hover keys, auto-res snippet, class defaults | `Initialize`, `Set`, `BuildAttributes`, `Apply`, `ApplyToButton`, `QueueApply`, `AddBindingsToTooltip`, `GetModifierPrefix`, `GetLeftClickAmount`, `MovesTheCharacter`, `CheckHoverKeys` |
 | **UnitButton** | Visuals and per-unit event handling of one frame | `CreateVisuals`, `Init`, `UpdateAllButtons`, `UpdateAllAuras`, `RefreshAuraContainers` |
 | **Layout** | Container, 8 group headers + main tank + pet header, arrangement, titles, move mode, size presets, test mode | `Create`, `Refresh`, `Arrange`, `FitToContent`, `SetTestMode`, `GetSize` |
 | **Preview** | Fake members for test mode, using `UnitButton.CreateVisuals` | `Show`, `Hide` |
@@ -90,6 +90,7 @@ buttons:
 | `RAID_TARGET_UPDATE`, `PARTY_LEADER_CHANGED` | Top icons |
 | `READY_CHECK*` | Centre icon; lingers 5s after the check ends |
 | `SPELLS_CHANGED` | Debounced 0.5s: rescan spells, dispels, buffs; re-apply bindings (highest rank); refresh the click casting rows if that page shows |
+| `UPDATE_BINDINGS` | `ClickCast:CheckHoverKeys`: re-apply bindings only if a hover key now moves your character, or no longer does; refresh the click casting rows if that page shows |
 
 ## Layout
 
@@ -122,7 +123,15 @@ charDB.bindings["shift-2"] = { action="spell", spellID=139, highestRank=true, ta
 ```
 
 - **Hover keys** use virtual buttons `neokey1..3`. The `_onenter` snippet calls
-  `SetBindingClick` for the key with every modifier.
+  `SetBindingClick` for the key with every modifier, but only for a hover key
+  with an action on at least one modifier whose key doesn't move the character
+  (`ClickCast.MovesTheCharacter`); any other key stays the game's. `_onleave`
+  and `_onhide` always clear these bindings, also when there's no snippet. The
+  key capture in the options refuses a key that moves the character. A saved
+  one (set before that check, or bound to movement since) isn't bound: the
+  tooltip leaves it out and its options button reads "W (moves you)".
+  `UPDATE_BINDINGS` re-checks after a key binding change. Why:
+  [forever-api.md](forever-api.md) section 6.
 - **Target and Open unit menu** keep the game's types (`target`, `togglemenu`)
   only on plain left and right click. Everywhere else Blizzard's click bindings
   would drop those types (see [forever-api.md](forever-api.md)), so the slot gets

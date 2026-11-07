@@ -272,6 +272,26 @@ function ClickCast:SetHoverKey(slot, key)
     self:QueueApply()
 end
 
+-- The game's held movement bindings: runOnUp="true" under the Movement header of
+-- Blizzard's Bindings_Standard.xml, so they start on key down and stop on key up.
+-- Toggles such as autorun aren't held and aren't here.
+local HELD_MOVEMENT_BINDINGS = {
+    MOVEANDSTEER = true, MOVEFORWARD = true, MOVEBACKWARD = true, TURNLEFT = true, TURNRIGHT = true,
+    STRAFELEFT = true, STRAFERIGHT = true, JUMP = true, SITORSTAND = true, PITCHUP = true, PITCHDOWN = true,
+}
+
+-- Whether the key moves your character now, with any modifier the _onenter snippet
+-- binds it with ("W" walks forward by default). The key capture (Options.lua)
+-- refuses such a key: while the mouse is on a frame it would stop moving you, and
+-- W kept the character walking (docs/forever-api.md section 6). A saved hover key
+-- that moves you isn't bound (BuildHoverKeySnippet), and its button says so.
+function ClickCast.MovesTheCharacter(key)
+    for _, modifier in ipairs(ClickCast.MODIFIERS) do
+        if HELD_MOVEMENT_BINDINGS[GetBindingAction(modifier.keyPrefix .. key)] then return true end
+    end
+    return false
+end
+
 function ClickCast:ResetToDefaults()
     NeoHeal.charDB.bindings = self:GetClassDefaults()
     self:QueueApply()
@@ -330,13 +350,26 @@ function ClickCast:BuildTargetingMacro(binding)
     return format("/target %s\n/cast [@%s] %s", unit, unit, spell)
 end
 
--- The _onenter snippet: bind each hover key (with every modifier, since "SHIFT-Q"
--- is a different binding than "Q") to click this button with its virtual button.
+-- Whether any modifier has an action on this hover key. A key without one is left
+-- alone: binding it would only take the key away, and W as a hover key without an
+-- action kept the character walking (docs/forever-api.md section 6).
+local function HoverKeyHasAction(button)
+    for _, modifier in ipairs(ClickCast.MODIFIERS) do
+        if NeoHeal.charDB.bindings[modifier.prefix .. button.id] then return true end
+    end
+    return false
+end
+
+-- The _onenter snippet: bind each hover key that has an action and doesn't move
+-- your character (with every modifier, since "SHIFT-Q" is a different binding than
+-- "Q") to click this button with its virtual button. A key that moves you is
+-- skipped even when saved: it was set before the key capture checked, or bound to
+-- movement since.
 function ClickCast:BuildHoverKeySnippet()
     local lines = {}
     for _, button in ipairs(self.BUTTONS) do
         local key = button.hoverKey and self:GetHoverKey(button.hoverKey)
-        if key then
+        if key and HoverKeyHasAction(button) and not ClickCast.MovesTheCharacter(key) then
             for _, modifier in ipairs(self.MODIFIERS) do
                 table.insert(lines, format("self:SetBindingClick(true, %q, self, %q)",
                     modifier.keyPrefix .. key, button.virtualButton))
@@ -384,12 +417,12 @@ function ClickCast:BuildAttributes()
         attributes["*macrotext-" .. virtualButton] = "/target mouseover" .. (choice.value ~= "unit" and choice.value or "")
     end
 
-    local hoverSnippet = self:BuildHoverKeySnippet()
-    if hoverSnippet then
-        attributes._onenter = hoverSnippet
-        attributes._onleave = "self:ClearBindings()"
-        attributes._onhide = "self:ClearBindings()"
-    end
+    -- Leaving and hiding clear the hover bindings even with no snippet: an action
+    -- removed while the mouse is on a frame (applied when combat ends) would
+    -- otherwise leave its key bound to that frame.
+    attributes._onenter = self:BuildHoverKeySnippet()
+    attributes._onleave = "self:ClearBindings()"
+    attributes._onhide = "self:ClearBindings()"
     return attributes
 end
 
@@ -437,6 +470,16 @@ end
 
 function ClickCast:QueueApply()
     NeoHeal:RunOutOfCombat("applyBindings", function() self:Apply() end)
+end
+
+-- After a key binding changed (UPDATE_BINDINGS): a hover key may now move your
+-- character, or no longer. Applies again only when that changes which keys the
+-- frames take over. NeoHeal's own hover bindings may fire the same event on every
+-- mouse-over (not checked); they never change this, because MovesTheCharacter
+-- reads the bindings without those temporary ones.
+function ClickCast:CheckHoverKeys()
+    if not self.attributes then return end   -- not applied yet; Apply checks then
+    if self:BuildHoverKeySnippet() ~= self.attributes._onenter then self:QueueApply() end
 end
 
 ---------------------------------------------------------------------------
@@ -580,8 +623,9 @@ function ClickCast:AddBindingsToTooltip(tooltip)
         local binding = bindings[prefix .. button.id]
         local label = button.label
         if button.hoverKey then
+            -- A key that moves you isn't bound (BuildHoverKeySnippet): it does nothing.
             local key = hoverKeys[button.hoverKey]
-            label = key and format(L.HOVER_KEY, key)
+            label = key and not ClickCast.MovesTheCharacter(key) and format(L.HOVER_KEY, key)
         end
         if binding and label then
             table.insert(lines, { label, DescribeForTooltip(binding) })

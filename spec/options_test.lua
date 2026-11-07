@@ -51,14 +51,28 @@ end
 
 -- The real window on fake frames: every frame method returns another fake frame,
 -- and each dropdown's menu builder is recorded so a test can click through it.
--- TitleText is nil, as on a frame template without one.
-local menuBuilders
+-- Each frame keeps its scripts and whether it takes keyboard input, and each frame
+-- with an OnKeyDown script is recorded: those are the hover-key capture buttons,
+-- slot 1 first. TitleText is nil, as on a frame template without one.
+local menuBuilders, keyCaptureButtons
 
 local function FakeFrame()
-    return setmetatable({}, { __index = function(_, key)
+    return setmetatable({ scripts = {}, keyboardEnabled = false }, { __index = function(_, key)
         if key == "TitleText" then return nil end
         if key == "SetupMenu" then
             return function(_, builder) table.insert(menuBuilders, builder) end
+        end
+        if key == "SetScript" then
+            return function(frame, name, func)
+                frame.scripts[name] = func
+                if name == "OnKeyDown" then table.insert(keyCaptureButtons, frame) end
+            end
+        end
+        if key == "EnableKeyboard" then
+            return function(frame, enabled) frame.keyboardEnabled = enabled end
+        end
+        if key == "SetText" then
+            return function(frame, text) frame.text = text end
         end
         return function() return FakeFrame() end
     end })
@@ -89,7 +103,7 @@ TestOptionsWindow = {}
 
 function TestOptionsWindow:setUp()
     local ns = Support.Load({ "Locales/enUS.lua", "Spells.lua", "ClickCast.lua", "Options.lua" })
-    menuBuilders = {}
+    menuBuilders, keyCaptureButtons = {}, {}
     CreateFrame, UIParent, UISpecialFrames = FakeFrame, FakeFrame(), {}
     Round = function(value) return math.floor(value + 0.5) end
     MinimalSliderWithSteppersMixin = { Label = { Right = 1 }, Event = { OnValueChanged = 1 } }
@@ -112,6 +126,34 @@ function TestOptionsWindow:testHighestRankMinusOneSavesTheRankBelowTheHighest()
     lu.assertEquals(binding.spellID, FLASH_HEAL[6])
     lu.assertEquals(binding.rankOffset, 1)
     lu.assertTrue(binding.highestRank)
+end
+
+-- A key that moves you can't be a hover key (W walks forward by default): the
+-- capture says why at the top of the screen and keeps waiting for another key.
+function TestOptionsWindow:testTheKeyCaptureRefusesAKeyThatMovesYou()
+    GetBindingAction = function(key) return key == "W" and "MOVEFORWARD" or "" end
+    local capture = keyCaptureButtons[1]   -- hover key 1
+    capture.scripts.OnClick(capture, "LeftButton")   -- start capturing
+    lu.assertTrue(capture.keyboardEnabled)
+    capture.scripts.OnKeyDown(capture, "W")
+    lu.assertNil(self.ns.charDB.hoverKeys[1])
+    lu.assertEquals(Support.errorMessages, { format(self.ns.L.HOVER_KEY_MOVES, "W") })
+    lu.assertTrue(capture.keyboardEnabled)   -- still waiting
+    capture.scripts.OnKeyDown(capture, "Q")
+    lu.assertEquals(self.ns.charDB.hoverKeys[1], "Q")
+    lu.assertFalse(capture.keyboardEnabled)
+end
+
+-- A saved hover key that moves you isn't bound: its button says why.
+function TestOptionsWindow:testAHoverKeyThatMovesYouIsMarked()
+    GetBindingAction = function(key) return key == "W" and "MOVEFORWARD" or "" end
+    local capture = keyCaptureButtons[1]
+    self.ns.charDB.hoverKeys[1] = "W"
+    capture:Refresh()
+    lu.assertEquals(capture.text, format(self.ns.L.HOVER_KEY_MOVES_YOU, "W"))
+    self.ns.charDB.hoverKeys[1] = "Q"
+    capture:Refresh()
+    lu.assertEquals(capture.text, "Key: Q")
 end
 
 function TestOptionsWindow:testTheBuiltPageRefreshesWhileItShows()

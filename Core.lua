@@ -237,12 +237,21 @@ function NeoHeal:SPELLS_CHANGED()
     end)
 end
 
+-- You changed a key binding: a hover key may now move your character, or no
+-- longer, and such a key mustn't be bound to the frames (ClickCast.lua). Before
+-- the frames' first Apply (logging in, or in combat at login) it does nothing.
+function NeoHeal:UPDATE_BINDINGS()
+    self.ClickCast:CheckHoverKeys()
+    self.Options:RefreshClickCastingPage()   -- a hover-key button may now read "(moves you)", or no longer
+end
+
 local eventFrame = CreateFrame("Frame")
 eventFrame:SetScript("OnEvent", function(_, event, ...) NeoHeal[event](NeoHeal, ...) end)
 eventFrame:RegisterUnitEvent("UNIT_TARGET", "target")
 for _, event in ipairs({ "PLAYER_LOGIN", "PLAYER_REGEN_ENABLED", "PLAYER_REGEN_DISABLED", "GROUP_ROSTER_UPDATE", "SPELLS_CHANGED",
                          "UNIT_PET", "RAID_TARGET_UPDATE", "PLAYER_TARGET_CHANGED", "PARTY_LEADER_CHANGED",
-                         "READY_CHECK", "READY_CHECK_CONFIRM", "READY_CHECK_FINISHED", "PLAYER_ROLES_ASSIGNED" }) do
+                         "READY_CHECK", "READY_CHECK_CONFIRM", "READY_CHECK_FINISHED", "PLAYER_ROLES_ASSIGNED",
+                         "UPDATE_BINDINGS" }) do
     -- Skip events this client doesn't know (registering one raises an error).
     if not C_EventUtils or C_EventUtils.IsEventValid(event) then
         eventFrame:RegisterEvent(event)

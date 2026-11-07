@@ -299,7 +299,11 @@ local function CreateKeyCaptureButton(row, slot)
 
     function button:Refresh()
         local key = ClickCast:GetHoverKey(slot)
-        self:SetText(key and format(L.HOVER_KEY, key) or L.SET_HOVER_KEY)
+        if key and ClickCast.MovesTheCharacter(key) then
+            self:SetText(format(L.HOVER_KEY_MOVES_YOU, key))   -- saved earlier, or bound to movement since: not bound
+        else
+            self:SetText(key and format(L.HOVER_KEY, key) or L.SET_HOVER_KEY)
+        end
     end
     local function StopCapture()
         button:EnableKeyboard(false)
@@ -319,6 +323,10 @@ local function CreateKeyCaptureButton(row, slot)
     end)
     button:SetScript("OnKeyDown", function(_, key)
         if MODIFIER_KEYS[key] then return end   -- wait for the real key
+        if ClickCast.MovesTheCharacter(key) then   -- say why, and wait for another key
+            UIErrorsFrame:AddMessage(format(L.HOVER_KEY_MOVES, key), 1, 0.1, 0.1)
+            return
+        end
         if key ~= "ESCAPE" then ClickCast:SetHoverKey(slot, key) end
         StopCapture()
         Options:RefreshBindingRows()   -- another slot may have lost this key
