@@ -83,6 +83,12 @@ NOTE: Inspired by HealBot which I loved to use for a long time
 
 The changelog per file, in Markdown like the description.
 
+### 0.4.1
+
+```markdown
+- Fix: a hover key on a key that moves you, such as W, could keep your character walking once the mouse was over a frame. A hover key now only takes its key while it has an action, and never a key that moves you: setting one is refused, and one set before shows as "W (moves you)" and does nothing until that key no longer moves you.
+```
+
 ### 0.4.0
 
 ```markdown
