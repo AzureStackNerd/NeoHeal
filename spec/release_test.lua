@@ -153,6 +153,20 @@ function TestRelease:test_only_a_release_version_tag_starts_a_release()
     end
 end
 
+-- S24, AC5 (fix round 1): a hand start on a release tag has the same ref as a tag
+-- push, so the event alone makes it build-only. Its run must say so: action
+-- build-only and a notice that only a tag push publishes, not a release that
+-- silently did not go out.
+function TestRelease:test_a_hand_start_on_a_release_tag_builds_only()
+    local result = Release.Check({ event = "workflow_dispatch", ref = "refs/tags/v0.7.0", toc = Toc("0.7.0"),
+        notes = NOTES_070, versions = { "1.60.1" } })
+    lu.assertFalse(result.publish)
+    lu.assertEquals(result.action, "build-only")
+    lu.assertNotNil(result.notice, "a hand start on a release tag gives no notice")
+    lu.assertStrContains(result.notice, "push")
+    lu.assertEquals(#result.problems, 0, "a clean hand start is green")
+end
+
 -- How: Notes slices one section, its heading exactly "### X.Y.Z" (trailing spaces or
 -- CR allowed), ending at the next heading of level 1 to 3 or the end of the file.
 -- No section, a blank one or two matching ones is the missing-notes stop (S12).

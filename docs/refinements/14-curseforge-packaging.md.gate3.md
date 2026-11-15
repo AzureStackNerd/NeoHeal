@@ -97,3 +97,25 @@ form is also covered by the same rule: `vX.Y.Z` publishes, everything else build
   the result.
 - **`docs/architecture.md` and `docs/extending.md`**: grepped for `curseforge`, `ZIP`,
   `release`, with no hit, so neither needed a change.
+
+## AC table
+
+As of `cc41672`. Test row and Seen red are taken from
+`14-curseforge-packaging.md.gate3-tests.md`; the red lines in that file quote the test's own
+assertion. The mutation runs behind each "Seen red" are that file's. The suite measured in
+this working tree (that commit plus the TestWriter's one uncommitted row,
+`test_a_hand_start_on_a_release_tag_builds_only`): `lua spec/run.lua` → 271 tests, 0
+failures.
+
+| AC | Test row | Seen red | Met |
+| --- | --- | --- | --- |
+| AC1 | `test_the_event_table_from_check_to_packager`, `test_the_workflow_as_written`, `test_the_toc_names_NeoHeals_CurseForge_project` | F1: the old `publish == 'true' && '' \|\| '-d'` put back; `release_test.lua:469: push refs/tags/v0.7.0 clean: packager args '... -n "{package-name}-..."`. M6: project line deleted; `release_test.lua:131: expected: "1726356"` | yes |
+| AC2 | `test_both_ship_lists_leave_out_the_same_entries`, `test_the_ship_rule_on_synthetic_lists`, `test_the_shipped_files_are_the_toc_what_it_loads_and_LICENSE` | M3: `- .github` dropped from `.pkgmeta`; `release_test.lua:138: '.pkgmeta does not ignore ".github", which .gitattributes leaves out'`. M18: `/.pkgmeta` dropped from `.gitattributes`; `release_test.lua:181: expected: nil, actual: '.gitattributes does not leave out ".pkgmeta"'`. M12b: `release_test.lua:154: docsx/a.md` | yes |
+| AC3 | `test_the_changelog_is_the_tagged_versions_notes`, `test_pkgmeta_names_the_written_changelog`, `test_the_real_notes_hold_the_toc_versions_section` | M9: `elseif sections > 1` → `elseif false`; `release_test.lua:117: ### 0.7.0`. M2: `release_test.lua:176: Could not find substring`. M14: `release_test.lua:190: ### 0.6.0 sections` | yes |
+| AC4 | `test_release_tag_stops_table` (version-match and listed-version columns) | M8: `if version ~= tocVersion` → `if false`; `release_test.lua:62: cell match=false notes=true listed=true: publish`. M13: `$` dropped in the tag pattern; `release_test.lua:100: refs/tags/v0.7.0-beta1` | yes |
+| AC5 | `test_the_event_table_from_check_to_packager`, `test_only_a_release_version_tag_starts_a_release`, `test_non_release_stops_table` | F3: `event == "push" and` dropped; `release_test.lua:469: workflow_dispatch refs/tags/v0.7.0 clean: packager args` (no `-d`). M13 as above. M15a: `release_test.lua:109: refs/tags/v0.7.0-beta1` | yes |
+| AC6 | `test_the_event_table_from_check_to_packager`, `test_project_id_stop`, `test_non_release_stops_table`, `test_the_recovery_docs_name_both_routes` | M11b: `release_test.lua:87: project line ''`. F4: `event = options.event` dropped; `release_test.lua:469: push refs/tags/v0.7.0 clean: packager args` (`-d` present). D1b: `release_test.lua:261: the re-run route does not check the files page first: ...`. D2: `release_test.lua:264: Could not find pattern "When no file for this version is listed there"` | yes |
+
+"Met" is what this gate can show: everything except the real trigger, token call, upload and
+the game-side load, which are the `## Not done` items above (S1, S2, S15 to S19 and S7 on a
+real release).

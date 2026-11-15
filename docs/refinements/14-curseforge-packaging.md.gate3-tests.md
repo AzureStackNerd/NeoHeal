@@ -194,3 +194,9 @@ refreshed copy, and each red is the row's own assertion.
 | `docs/curseforge.md:127` `### 0.6.0` contract (M14rr) | `test_the_real_notes_hold_the_toc_versions_section` | `release_test.lua:241: ### 0.6.0 sections` | `e770dca` |
 
 No row now reads unproved.
+
+Scrum Master's last gap: `spec/release.lua:263`, the `elseif event ~= "push"` branch of `Release.Check`. 1 run used.
+
+| Site | Test | Seen red how | Proved on |
+| --- | --- | --- | --- |
+| `spec/release.lua:263` hand start on a release tag | `test_a_hand_start_on_a_release_tag_builds_only` | E1: `elseif event ~= "push"` changed to `elseif false`; `release_test.lua:164: expected: "build-only"` | `3eb01ba` |
