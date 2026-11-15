@@ -37,7 +37,6 @@ every click casts and how much it heals.
 
 ### Description
 
-```markdown
 NeoHeal is a small set of party and raid frames for healers on WoW: Forever. Bind your heals, cures and buffs to mouse clicks and keys, and cast them straight on the frame under your mouse.
 
 ## Click casting
@@ -61,6 +60,7 @@ The frame under your mouse also shows how much your left click would heal: a lig
 - Class or health colors, incoming heals, shields, a low-health tint, and health as a percentage or as health missing.
 - Up to two debuffs you can't dispel, such as boss debuffs, and a colored strip for debuffs you can dispel.
 - Priests and Druids: your own HoTs and shields with timers. Priests, Druids and Mages: out of combat, an icon shows who lacks your raid buff or has little of it left.
+- Healers at 20% mana or less show a blue "OOM".
 - Aggro, your target, the member your enemy target is targeting, raid markers, role and leader icons, ready checks, resurrections and summons. Members out of range fade.
 
 ## Options
@@ -72,7 +72,6 @@ Does a click cast something other than you bound? Check the game's own Click Cas
 Made for WoW: Forever (Interface 16001). The heal amounts are read from the spell descriptions of an English client.
 
 NOTE: Inspired by HealBot which I loved to use for a long time
-```
 
 ## Uploading a file
 
@@ -86,42 +85,32 @@ The changelog per file, in Markdown like the description.
 
 ### 0.6.0
 
-```markdown
 - New: frames for your target and your focus ("Show target frame" and "Show focus frame" on the Layout page, off by default). Heal someone you have targeted or focused with your click casting, also when they are not in your group. They show above the NeoHeal frames while that unit is friendly.
 - New: the missing-buff icon also shows when a member's raid buff from your class has 10% or less of its duration left (3 minutes of a 30-minute buff), so you can rebuff before the pull.
 - New: a healer at 20% mana or less shows a blue "OOM" on their frame ("Show low mana" on the Layout page).
 - The options window shows the NeoHeal version in its title.
-```
 
 ### 0.5.0
 
-```markdown
 - New: NeoHeal is listed in the addon compartment, the addon list beside the minimap. Click it to open the options window, and again to close it.
 - Fix: with the options window open, keys that move your character, such as W, work again. The first time you opened the window after logging in or a /reload, W showed the "moves your character" warning instead of walking. That warning now only appears after you click Set key.
-```
 
 ### 0.4.1
 
-```markdown
 - Fix: a hover key on a key that moves you, such as W, could keep your character walking once the mouse was over a frame. A hover key now only takes its key while it has an action, and never a key that moves you: setting one is refused, and one set before shows as "W (moves you)" and does nothing until that key no longer moves you.
-```
 
 ### 0.4.0
 
-```markdown
 - Heal prediction: the frame under your mouse shows how much your left click would heal, as a lighter bar after the incoming heals. It follows Shift, Ctrl and Alt, and "Show left-click heal prediction" (Layout) turns it off. A shield on the left click shows its absorb in blue, out of combat and only when the member can take a new shield.
 - Tip: if a click casts something other than you bound, check the game's own Click Casting window (/run ToggleClickBindingFrame()). A spell bound there wins over NeoHeal's binding.
-```
 
 ### 0.3.0
 
-```markdown
 First release on CurseForge.
 
 - Click casting with five mouse buttons, three hover keys and Shift/Ctrl/Alt; highest rank, "Highest rank -1" or a fixed rank; cast on the unit, its target or its target's target.
 - A tooltip that lists your bindings and how much each heal or shield heals or absorbs.
 - Party and raid frames with size presets, HoT timers, debuffs, a dispel strip, missing raid buffs, role icons and test mode.
-```
 
 ## Building the ZIP
 
