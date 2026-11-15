@@ -4,6 +4,7 @@
 ## Author: neoGore
 ## Version: 0.4.1
 ## IconTexture: Interface\Icons\Spell_Holy_FlashHeal
+## AddonCompartmentFunc: NeoHeal_OnAddonCompartmentClick
 ## SavedVariables: NeoHealDB
 ## SavedVariablesPerCharacter: NeoHealCharDB
 

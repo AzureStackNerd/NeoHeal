@@ -16,9 +16,9 @@ Interface version `16001`, addon version `0.4.1`.
 ## Repository layout
 
 ```
-NeoHeal.toc          load order and saved variables
+NeoHeal.toc          load order, saved variables, addon compartment entry
 Locales/enUS.lua     strings (L); loads first
-Core.lua             saved variables, global events, out-of-combat queue, /neoheal
+Core.lua             saved variables, global events, out-of-combat queue, /neoheal, compartment entry
 Spells.lua           spellbook scan, spell ranks
 Dispel.lua           which debuff types you can remove; colour curve for the dispel strip
 AuraContainer.lua    Blizzard-drawn aura icons (the only way to show auras in combat)

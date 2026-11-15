@@ -4,8 +4,9 @@
 
 Every file starts with `local _, NeoHeal = ...` and adds one table to the shared
 addon namespace (`NeoHeal.Layout`, `NeoHeal.UnitButton`, ...). There are no
-globals besides the saved variables, the slash command and a few named frames
-(`NeoHealFrame`, `NeoHealGroup1..8`, `NeoHealMainTanks`, `NeoHealPets`,
+globals besides the saved variables, the slash command, the addon compartment
+click handler the TOC names (`NeoHeal_OnAddonCompartmentClick`) and a few named
+frames (`NeoHealFrame`, `NeoHealGroup1..8`, `NeoHealMainTanks`, `NeoHealPets`,
 `NeoHealOptionsFrame`, `NeoHealResHandler`).
 
 Load order (`NeoHeal.toc`) matters only at file scope. Most cross-module calls
@@ -20,7 +21,7 @@ Locales/enUS.lua → Core → Spells → Dispel → AuraContainer → Hots → M
 
 | Module | Owns | Key functions |
 | --- | --- | --- |
-| **Core** | Defaults, migrations, global events, the out-of-combat queue, `/neoheal` | `RunOutOfCombat`, `IsSecret/IsTrue/IsFalse`, `Print` |
+| **Core** | Defaults, migrations, global events, the out-of-combat queue, `/neoheal` and the addon compartment entry | `RunOutOfCombat`, `IsSecret/IsTrue/IsFalse`, `Print`, `NeoHeal_OnAddonCompartmentClick` |
 | **Spells** | Spellbook scan grouped by name with all ranks | `Scan`, `GetHighestRank`, `GetRankText` |
 | **Dispel** | Debuff types the player can cure; colour curve and filter for the dispel strip | `UpdateKnownDispels`, `GetColorCurve`, `GetBorderFilters` |
 | **AuraContainer** | Wrapper around Blizzard's `CustomAuraContainerTemplate`; the shared countdown font | `Create`, `CreateDispelStrip`, `SetUnit`, `SetShown`, `AddTimedCooldown` |

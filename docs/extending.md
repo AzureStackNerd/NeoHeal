@@ -138,3 +138,5 @@ In game:
   switch only after combat).
 - Enter combat with the feature active: no "secret value" or "action blocked" errors.
 - `/neoheal debug` and `/neoheal clicks` for aura and binding issues.
+- The NeoHeal icon in the addon compartment: it shows NeoHeal's name and icon,
+  and clicking it opens and closes the options window.

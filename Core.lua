@@ -1,5 +1,6 @@
--- NeoHeal core: saved variables, global events, the out-of-combat queue and the
--- slash command. Every module is a table on the shared NeoHeal namespace.
+-- NeoHeal core: saved variables, global events, the out-of-combat queue, the
+-- slash command and the addon compartment entry. Every module is a table on the
+-- shared NeoHeal namespace.
 local _, NeoHeal = ...
 local L = NeoHeal.L
 
@@ -268,4 +269,12 @@ SlashCmdList.NEOHEAL = function(message)
     else
         NeoHeal.Options:Toggle()
     end
+end
+
+-- Blizzard's addon compartment (the list beside the minimap) calls the function
+-- named in the TOC's AddonCompartmentFunc as a global, passing the addon name and
+-- the mouse button; neither is used, because clicking it should do exactly what
+-- /neoheal does: the same Toggle, so a second click closes the window again.
+function NeoHeal_OnAddonCompartmentClick()
+    NeoHeal.Options:Toggle()
 end

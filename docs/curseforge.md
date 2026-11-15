@@ -64,7 +64,7 @@ The frame under your mouse also shows how much your left click would heal: a lig
 
 ## Options
 
-Type /neoheal. Test mode shows a fake group of 5, 10, 25 or 40 players, so you can tune the look and layout without a raid.
+Type /neoheal, or click the NeoHeal icon in the addon compartment beside the minimap. Test mode shows a fake group of 5, 10, 25 or 40 players, so you can tune the look and layout without a raid.
 
 Does a click cast something other than you bound? Check the game's own Click Casting window (/run ToggleClickBindingFrame()): a spell bound there on the same button and modifiers wins over NeoHeal's binding.
 

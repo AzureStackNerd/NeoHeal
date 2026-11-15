@@ -14,6 +14,8 @@ from green to red, and the raid size preset:
 ## Opening the options
 
 - `/neoheal` opens or closes the options window (Escape closes it too).
+- The NeoHeal icon in the addon compartment, the addon list beside the minimap,
+  does the same: one click opens, another closes.
 - Esc > Options > AddOns > NeoHeal has a button that opens the same window.
 - `/neoheal debug` prints which HoT and raid marker data the game hides right
   now. Run it in combat to see what Forever hides.
