@@ -168,3 +168,29 @@ fix-round tree. The mutations are the same as the originals, and each red is the
 
 No row now reads unproved. Working-tree hashes after the runs: `spec/release.lua` `3eb01ba`, `docs/curseforge.md`
 `f25765e`.
+
+## Fix round 2
+
+The finding was S19 and AC6: the re-run route did not check the files page first. The Developer fixed
+`docs/curseforge.md:99-104`. `test_the_recovery_docs_name_both_routes` now reads that bullet and asserts two things:
+it names the files page before "Re-run failed jobs", and it re-runs only "When no file for this version is listed
+there". 2 runs were used. D1 ran no test: its anchor began with `-`, which grep read as an option.
+
+| Site | Test | Seen red how | Proved on |
+| --- | --- | --- | --- |
+| `docs/curseforge.md:99` files-page check | `test_the_recovery_docs_name_both_routes` | D1b: "check NeoHeal's files page on" changed to "check the run's log on"; `release_test.lua:261: the re-run route does not check the files page first: ...` | `e770dca` |
+| `docs/curseforge.md:101` re-run only without a file | `test_the_recovery_docs_name_both_routes` | D2: the "When no file ... listed there" clause cut; `release_test.lua:264: Could not find pattern "When no file for this version is listed there"` | `e770dca` |
+
+`unproved: site edited`: F5 (recovery, line 93 area) and M14r (`### 0.6.0`). Both were proved on `f25765e`, and
+`docs/curseforge.md` is now `e770dca`. Their lines are not in the fix-2 diff and their tests pass, but no runs were
+left to re-prove them.
+
+Re-proof after fix round 2. These two rows replace the `unproved: site edited` line above. They used 2 runs on a
+refreshed copy, and each red is the row's own assertion.
+
+| Site | Test | Seen red how | Proved on |
+| --- | --- | --- | --- |
+| `docs/curseforge.md:107` recovery: move the tag (F5r) | `test_the_recovery_docs_name_both_routes` | `release_test.lua:252: Could not find substring "tag the fixed commit, and push the tag again"` | `e770dca` |
+| `docs/curseforge.md:127` `### 0.6.0` contract (M14rr) | `test_the_real_notes_hold_the_toc_versions_section` | `release_test.lua:241: ### 0.6.0 sections` | `e770dca` |
+
+No row now reads unproved.

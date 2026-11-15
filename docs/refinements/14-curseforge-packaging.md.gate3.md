@@ -52,6 +52,7 @@ form is also covered by the same rule: `vX.Y.Z` publishes, everything else build
 | `spec/run.lua:10` | `release_test` joins the suite's file list, so the tests run at all (a spec file missing from that list never runs) | AC1 to AC6, S23 | `CLAUDE.md` (the test command), `docs/extending.md` (a new spec file is listed in `spec/run.lua`) |
 | `docs/curseforge.md:76` | the release procedure, the notes' heading contract, the file and its changelog, the hand route as fallback | S22, AC1, AC3 | `docs/README.md` |
 | `docs/curseforge.md:93` | recovery: re-run for a cause outside the repository, move the tag to the fixed commit for one inside it; "Run workflow" never publishes | S20, AC6 | `docs/README.md` |
+| `docs/curseforge.md:99` | the outside-the-repository route checks the CurseForge files page first and re-runs only when no file for the version is listed, because a network failure can follow a completed upload | S19, S20, AC6 | `docs/README.md` |
 | `docs/README.md:14` | the row for curseforge.md | S22 | itself |
 
 ## Done and verified

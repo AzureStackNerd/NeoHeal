@@ -253,6 +253,16 @@ function TestRelease:test_the_recovery_docs_name_both_routes()
     lu.assertStrContains(docs, '"Run workflow" never publishes')
     lu.assertNil(docs:find("run the workflow again for the same tag", 1, true),
         "the docs still tell the maintainer to re-run for the same tag after a fix in the repository")
+    -- S19 (fix round 2): a network failure can come after the upload went through, so
+    -- the re-run route must send the maintainer to the files page before the re-run.
+    local rerunBullet = docs:match("%- The token, CurseForge's version list, or the network:(.-) %- ")
+    lu.assertNotNil(rerunBullet, "no re-run bullet for causes outside the repository")
+    local filesPage = rerunBullet:find("files page", 1, true)
+    lu.assertNotNil(filesPage, "the re-run route does not check the files page first: " .. rerunBullet)
+    lu.assertTrue(filesPage < rerunBullet:find('"Re-run failed jobs"', 1, true),
+        "the files page check comes after the re-run: " .. rerunBullet)
+    lu.assertStrContains(rerunBullet, "When no file for this version is listed there",
+        "the re-run is not limited to a version with no file listed")
 end
 
 -- AC5, AC6, S23, How: the workflow as written. Its three starts, its order (tests,

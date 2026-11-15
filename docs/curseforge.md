@@ -96,8 +96,12 @@ uploaded, and its log names the reason.
 
 **When a run fails, how to fix it depends on where the cause is.**
 
-- The token, CurseForge's version list, or the network: fix it on that side, then use
-  "Re-run failed jobs" on the failed run. It rebuilds from the same commit and tag.
+- The token, CurseForge's version list, or the network: check NeoHeal's files page on
+  CurseForge first, because a network failure can happen after the upload went
+  through. When no file for this version is listed there, fix the cause and use
+  "Re-run failed jobs" on the failed run: it rebuilds from the same commit and tag.
+  When a file for the version is already listed, the release went out; fix nothing
+  and do not re-run.
 - Something in the repository: the toc's version, the notes, the project ID. A
   re-run would use the same commit, so the fix has to be on the tag: delete the tag
   locally and on GitHub, tag the fixed commit, and push the tag again. That is a
