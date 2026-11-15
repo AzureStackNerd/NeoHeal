@@ -331,6 +331,11 @@ local function CreateKeyCaptureButton(row, slot)
         StopCapture()
         Options:RefreshBindingRows()   -- another slot may have lost this key
     end)
+    -- Setting OnKeyDown turns keyboard input on by itself, so until this the button
+    -- took every key from the first time the window opened after a /reload: W showed
+    -- the warning instead of walking (docs/forever-api.md, section 7). It listens only
+    -- after a click on Set key.
+    button:EnableKeyboard(false)
     button:SetScript("OnHide", StopCapture)
     button:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")

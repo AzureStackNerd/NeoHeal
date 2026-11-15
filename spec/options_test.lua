@@ -53,7 +53,8 @@ end
 -- and each dropdown's menu builder is recorded so a test can click through it.
 -- Each frame keeps its scripts and whether it takes keyboard input, and each frame
 -- with an OnKeyDown script is recorded: those are the hover-key capture buttons,
--- slot 1 first. TitleText is nil, as on a frame template without one.
+-- slot 1 first. Setting OnKeyDown turns keyboard input on, as the client does
+-- (docs/forever-api.md, section 7). TitleText is nil, as on a frame template without one.
 local menuBuilders, keyCaptureButtons
 
 local function FakeFrame()
@@ -65,7 +66,10 @@ local function FakeFrame()
         if key == "SetScript" then
             return function(frame, name, func)
                 frame.scripts[name] = func
-                if name == "OnKeyDown" then table.insert(keyCaptureButtons, frame) end
+                if name == "OnKeyDown" then
+                    table.insert(keyCaptureButtons, frame)
+                    frame.keyboardEnabled = true
+                end
             end
         end
         if key == "EnableKeyboard" then
@@ -126,6 +130,16 @@ function TestOptionsWindow:testHighestRankMinusOneSavesTheRankBelowTheHighest()
     lu.assertEquals(binding.spellID, FLASH_HEAL[6])
     lu.assertEquals(binding.rankOffset, 1)
     lu.assertTrue(binding.highestRank)
+end
+
+-- With the window open you walk normally: no hover-key button takes keys until
+-- you click Set key on it. Seen in game 2026-11-15: the first open after a
+-- /reload swallowed W and showed the "moves your character" warning.
+function TestOptionsWindow:testNoKeyCaptureTakesKeysBeforeItsClick()
+    lu.assertEquals(#keyCaptureButtons, 3)   -- hover keys 1 to 3
+    for slot, capture in ipairs(keyCaptureButtons) do
+        lu.assertFalse(capture.keyboardEnabled, "hover key " .. slot .. " takes keys before its click")
+    end
 end
 
 -- A key that moves you can't be a hover key (W walks forward by default): the

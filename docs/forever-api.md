@@ -171,6 +171,23 @@ binding change. The wiki says that event fires after `LoadBindings`,
 bindings fire it too isn't known, and `CheckHoverKeys` re-applies nothing for
 them either way. None of this has been checked in the game yet.
 
+## 7. Setting OnKeyDown turns keyboard input on
+
+Seen in the game on 2026-11-15: the first time the options window opened after
+a `/reload`, W didn't walk. It showed the hover-key warning "W moves your
+character" instead, although no Set key button had been clicked. After closing
+and reopening the window, W walked normally. The hover-key buttons get their
+`OnKeyDown` script when the window is built, and only `StopCapture` (on a
+captured key, or `OnHide`) turned their keyboard off. Blizzard's docs don't say
+that setting `OnKeyDown` calls `EnableKeyboard(true)`, but a fix in another addon
+(BlizzHUDTweaks, pull request 124) says it does, and that is the only reading
+that explains both halves of what was seen. A keyboard-enabled frame that
+doesn't propagate keyboard input blocks every key binding while it shows.
+
+**Rule:** call `EnableKeyboard(false)` right after setting `OnKeyDown` on a
+frame that should only listen on request. `CreateKeyCaptureButton` in
+`Options.lua` does. Whether the fix works in the game isn't checked yet.
+
 ## Checklist before shipping a change
 
 - [ ] Does it touch a secure frame or attribute? → `RunOutOfCombat`.
