@@ -94,3 +94,77 @@ working-tree hash equals its Proved-on hash at the end (rechecked after M19b). T
 Anchors that matched no line or did not change the file ran no test: M1, M1b, M4, M7, M10, M12. The causes were Git
 Bash path conversion of a leading `/`, and lines the Developer moved. M11 was discarded: it went red with a Lua error
 (a nil concatenation), not on its assertion, and was redone as M11b.
+
+## Fix round 1
+
+Findings (`brief-fix1.md`):
+
+1. The `-d` expression always gave `-d`.
+2. A hand start on a release tag published.
+3. The recovery docs re-ran the same commit.
+
+My old test pinned the broken expression string (former `release_test.lua:248`). That pin is removed.
+
+Unproved, site edited (Developer, fix round 1): `.github/workflows/release.yml` (packager args, now line 107, and the
+check step's `--event`); `spec/release.lua` (`Release.Check` event rule, `Release.Main` `--event`);
+`docs/curseforge.md` (recovery). Every earlier row on these three files reads `unproved: site edited` until it is
+re-proved below.
+
+New tests:
+
+- `test_the_expression_evaluator`: a small GitHub-expression evaluator in the test file (`&&`/`||` return operands;
+  `false`, `0`, `''` and `null` are falsy; `==` ignores case), checked on its own cases.
+- `test_the_event_table_from_check_to_packager`: the brief's six rows end to end. `Release.Main` runs with
+  `--event`/`--ref`, its `GITHUB_OUTPUT` is parsed, and the packager's `args:` block is evaluated from those outputs.
+  The test asserts the exit code and whether `-d` is present. A further row holds How line 160: no outputs, or
+  anything but `publish=true`, still gives `-d`.
+- `test_the_workflow_as_written` additionally asserts the check step passes `--event "$GITHUB_EVENT_NAME"` (without
+  it `Check` never publishes, and a release builds green).
+
+Seen red before any mutation: the behavioural `-d` test, run against today's broken string
+(`${{ steps.check.outputs.publish == 'true' && '' || '-d' }}`, release.yml at `1117ace`), failed on its own assertion:
+`release_test.lua:391: push, publish=true must upload (no -d): -n "{package-name}-{project-version}:{package-name}-{project-version}"`.
+That test has since become `test_the_event_table_from_check_to_packager`.
+
+### Fix round 1: site to test
+
+The Developer declared these sites final (relay 24). The copy was refreshed, and 8 mutation runs were used. The
+anchor for F2 broke on a trailing backslash and ran no test; F2b redid it.
+
+| Site (file:line) | Test | Seen red how | Proved on |
+| --- | --- | --- | --- |
+| `.github/workflows/release.yml:107` packager args | `test_the_event_table_from_check_to_packager` | F1: the old `publish == 'true' && '' \|\| '-d'` put back; `release_test.lua:469: push refs/tags/v0.7.0 clean: packager args '... -n "{package-name}-..."` (`-d` present) | `a12d083` |
+| `.github/workflows/release.yml` check step `--event` | `test_the_workflow_as_written` | F2b: line deleted; `release_test.lua:271: Could not find substring` | `a12d083` |
+| `spec/release.lua` `Check` publish needs `push` | `test_the_event_table_from_check_to_packager` | F3: `event == "push" and` dropped; `release_test.lua:469: workflow_dispatch refs/tags/v0.7.0 clean: packager args` (no `-d`) | `3eb01ba` |
+| `spec/release.lua` `Main` passes `--event` | `test_the_event_table_from_check_to_packager` | F4: `event = options.event` dropped; `release_test.lua:469: push refs/tags/v0.7.0 clean: packager args` (`-d` present) | `3eb01ba` |
+| `docs/curseforge.md:93` recovery | `test_the_recovery_docs_name_both_routes` | F5: "tag the fixed commit, and push the tag again" cut; `release_test.lua:252: Could not find substring "tag the fixed commit, and push the tag again"` | `f25765e` |
+| `spec/release.lua` `Main` `publish=` output (re-proof of M19b) | `test_the_entry_point_tells_the_workflow_whether_to_publish` | R19: `publish=true` hardcoded; `release_test.lua:495: expected: "false"` | `3eb01ba` |
+| `spec/release.lua` stops on every start (re-proof of M15a) | `test_non_release_stops_table` | R15; `release_test.lua:116: refs/tags/v0.7.0-beta1 match=true notes=true listed=false: problems` | `3eb01ba` |
+| `spec/release.lua` version from the toc (re-proof of M16b) | `test_non_release_stops_table` | R16; `release_test.lua:114: refs/tags/v0.7.0-beta1 match=false notes=true listed=true: version from the toc` | `3eb01ba` |
+
+Superseded: M1c (the `-d` line, now F1) and M7b (the `publish` line, now F3).
+
+`unproved: site edited` (file hash changed by the fix, and the line itself is not in the fix diff; no runs left): M8, M9,
+M10b, M11b, M12b, M13 (`spec/release.lua` was `1261c74`, now `3eb01ba`) and M14 (`docs/curseforge.md` was `877f411`,
+now `f25765e`). Their tests pass on the new files. Sites on unedited files keep their proofs: `.pkgmeta`,
+`.gitattributes`, `.gitignore`, `NeoHeal.toc` and `spec/run.lua`, whose hashes are unchanged.
+
+The suite passes: `lua spec/run.lua` gives 270 tests, 0 failures.
+
+### Fix round 1: re-proof of the stale rows
+
+These 7 rows replace the `unproved: site edited` line above. They used 7 runs on a copy refreshed from the final
+fix-round tree. The mutations are the same as the originals, and each red is the row's own assertion.
+
+| Site | Test | Seen red how | Proved on |
+| --- | --- | --- | --- |
+| `spec/release.lua` version-match stop (M8r) | `test_release_tag_stops_table` | `release_test.lua:69: cell match=false notes=true listed=true: publish` | `3eb01ba` |
+| `spec/release.lua` two sections stop (M9r) | `test_the_changelog_is_the_tagged_versions_notes` | `release_test.lua:168: ### 0.7.0` | `3eb01ba` |
+| `spec/release.lua` Forever-version stop (M10r) | `test_release_tag_stops_table` | `release_test.lua:69: cell match=true notes=true listed=false: publish` | `3eb01ba` |
+| `spec/release.lua` missing project id (M11r) | `test_project_id_stop` | `release_test.lua:138: project line ''` | `3eb01ba` |
+| `spec/release.lua` ship rule prefix (M12r) | `test_the_ship_rule_on_synthetic_lists` | `release_test.lua:205: docsx/a.md` | `3eb01ba` |
+| `spec/release.lua` `ReleaseTagVersion` (M13r) | `test_only_a_release_version_tag_starts_a_release` | `release_test.lua:151: refs/tags/v0.7.0-beta1` | `3eb01ba` |
+| `docs/curseforge.md` `### 0.6.0` contract (M14r) | `test_the_real_notes_hold_the_toc_versions_section` | `release_test.lua:241: ### 0.6.0 sections` | `f25765e` |
+
+No row now reads unproved. Working-tree hashes after the runs: `spec/release.lua` `3eb01ba`, `docs/curseforge.md`
+`f25765e`.

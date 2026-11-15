@@ -37,6 +37,13 @@ local function AnyContains(list, ...)
     return false
 end
 
+-- The event GitHub gives each kind of ref in these tables: a tag or branch is pushed,
+-- a merge ref comes from a pull request. A hand start is its own row in the event table.
+local function EventFor(ref)
+    if ref:match("^refs/pull/") then return "pull_request" end
+    return "push"
+end
+
 TestRelease = {}
 
 -- The stops table, release-tag rows: tag v0.7.0 x version match x notes present x
@@ -52,6 +59,7 @@ function TestRelease:test_release_tag_stops_table()
                 cells = cells + 1
                 local label = ("cell match=%s notes=%s listed=%s"):format(tostring(match), tostring(notesPresent), tostring(listed))
                 local result = Release.Check({
+                    event = "push",
                     ref = "refs/tags/v0.7.0",
                     toc = Toc(match and "0.7.0" or "0.6.0"),
                     notes = notesPresent and NOTES_070 or NOTES_NO_070,
@@ -98,7 +106,7 @@ function TestRelease:test_non_release_stops_table()
                     -- absent means the file holds only another version's notes.
                     local other = tocVersion == "0.7.0" and "0.5.0" or "0.4.0"
                     local notes = "# Texts\n\n### " .. (notesPresent and tocVersion or other) .. "\n\n- Notes.\n"
-                    local result = Release.Check({ ref = ref, toc = Toc(tocVersion), notes = notes,
+                    local result = Release.Check({ event = EventFor(ref), ref = ref, toc = Toc(tocVersion), notes = notes,
                         versions = listed and { "1.60.1" } or { "1.59.0" } })
                     lu.assertFalse(result.publish, label .. ": publish")
                     lu.assertEquals(result.action, "build-only", label .. ": action")
@@ -125,7 +133,7 @@ end
 -- S18: a missing or wrong project id stops a release tag, naming the project id.
 function TestRelease:test_project_id_stop()
     for _, line in ipairs({ "", "## X-Curse-Project-ID: 999" }) do
-        local result = Release.Check({ ref = "refs/tags/v0.7.0", toc = Toc("0.7.0", line),
+        local result = Release.Check({ event = "push", ref = "refs/tags/v0.7.0", toc = Toc("0.7.0", line),
             notes = NOTES_070, versions = { "1.60.1" } })
         lu.assertFalse(result.publish, "project line '" .. line .. "'")
         lu.assertTrue(AnyContains(result.problems, "X-Curse-Project-ID"), "project line '" .. line .. "'")
@@ -139,7 +147,7 @@ function TestRelease:test_only_a_release_version_tag_starts_a_release()
     lu.assertEquals(Release.TagAction("v10.20.30"), "release")
     for _, ref in ipairs({ "refs/tags/v0.7.0-beta1", "refs/tags/vtest", "refs/tags/v0.7", "refs/tags/v0.7.0.1",
         "refs/tags/0.7.0", "refs/tags/xv0.7.0", "refs/heads/main", "refs/heads/v0.7.0", "refs/pull/7/merge" }) do
-        local result = Release.Check({ ref = ref, toc = Toc("0.7.0"), notes = NOTES_070, versions = { "1.60.1" } })
+        local result = Release.Check({ event = EventFor(ref), ref = ref, toc = Toc("0.7.0"), notes = NOTES_070, versions = { "1.60.1" } })
         lu.assertFalse(result.publish, ref)
         lu.assertEquals(result.action, "build-only", ref)
     end
@@ -156,7 +164,7 @@ function TestRelease:test_the_changelog_is_the_tagged_versions_notes()
     lu.assertNil((Release.Notes("### 0.7.01\n- No.\n### v0.7.0\n- No.\n#### 0.7.0\n- No.\n", "0.7.0")))
     for _, notes in ipairs({ "### 0.7.0\n\n  \n### 0.6.0\n- Old.\n", "### 0.7.0\n- A.\n### 0.7.0\n- B.\n",
         "### 0.7.0.1\n- No.\n", "### 0.7.0 beta\n- No.\n" }) do
-        local result = Release.Check({ ref = "refs/tags/v0.7.0", toc = Toc("0.7.0"), notes = notes, versions = { "1.60.1" } })
+        local result = Release.Check({ event = "push", ref = "refs/tags/v0.7.0", toc = Toc("0.7.0"), notes = notes, versions = { "1.60.1" } })
         lu.assertFalse(result.publish, notes)
         lu.assertTrue(AnyContains(result.problems, "### 0.7.0"), notes)
     end
@@ -234,6 +242,19 @@ function TestRelease:test_the_real_notes_hold_the_toc_versions_section()
     lu.assertNotNil(notes)
 end
 
+-- AC6, S20 (fix round 1, finding 3): the recovery instructions. A re-run uses the
+-- failed run's commit and tag, so it only fixes causes outside the repository; a
+-- fix in a commit needs the tag pushed again on that commit. "Run workflow" never
+-- publishes. Whitespace is folded so a re-wrapped line does not fail the test.
+function TestRelease:test_the_recovery_docs_name_both_routes()
+    local docs = ReadFile("docs/curseforge.md"):gsub("%s+", " ")
+    lu.assertStrContains(docs, '"Re-run failed jobs" on the failed run')
+    lu.assertStrContains(docs, "tag the fixed commit, and push the tag again")
+    lu.assertStrContains(docs, '"Run workflow" never publishes')
+    lu.assertNil(docs:find("run the workflow again for the same tag", 1, true),
+        "the docs still tell the maintainer to re-run for the same tag after a fix in the repository")
+end
+
 -- AC5, AC6, S23, How: the workflow as written. Its three starts, its order (tests,
 -- token, stops, packager, ZIP list), -d unless the stops say publish, the pinned
 -- actions, read-only permissions and no token for other upload targets.
@@ -245,7 +266,9 @@ function TestRelease:test_the_workflow_as_written()
     lu.assertStrContains(workflow, "uses: BigWigsMods/packager@01e8631a69c69d7654c788d152630d5fed9e3812")
     lu.assertStrContains(workflow, "fetch-depth: 0")
     lu.assertStrContains(workflow, '-n "{package-name}-{project-version}:{package-name}-{project-version}"')
-    lu.assertStrContains(workflow, "${{ steps.check.outputs.publish == 'true' && '' || '-d' }}")
+    -- Without the event Check sees "unknown" and never publishes: a release would
+    -- build green and upload nothing (fix round 1, finding 2).
+    lu.assertStrContains(workflow, 'lua5.4 spec/release.lua \\\n            --event "$GITHUB_EVENT_NAME" \\\n            --ref "$GITHUB_REF" \\\n')
     lu.assertStrContains(workflow, 'echo "::error::CF_API_TOKEN is not set"')
     lu.assertStrContains(workflow, 'if [ "$status" != "200" ]; then')
     local order = { "run: lua5.4 spec/run.lua", "https://wow.curseforge.com/api/game/wow/versions",
@@ -262,10 +285,126 @@ function TestRelease:test_the_workflow_as_written()
     end
 end
 
--- The entry point the workflow runs: on a release tag with a failed stop it exits 1
--- and writes no publish=true; on a clean release tag it writes the notes and
--- publish=true. os.getenv is swapped for GITHUB_OUTPUT and restored.
-function TestRelease:test_the_entry_point_tells_the_workflow_whether_to_publish()
+-- A small evaluator for GitHub Actions expressions (`${{ ... }}`), enough for the
+-- packager's args: literals ('text', true, false, null, numbers), dotted context
+-- names, !, ==, !=, &&, || and parentheses. Rules from GitHub's expressions docs:
+-- && and || return one of their operands, the falsy values are false, 0, '' and
+-- null, == compares strings ignoring case, and a missing context value is null.
+-- This is what makes `cond && '' || '-d'` always '-d': '' is falsy.
+local function EvalExpression(source, context)
+    local tokens, at = {}, 1
+    while at <= #source do
+        local c = source:sub(at, at)
+        if c:match("%s") then
+            at = at + 1
+        elseif c == "'" then
+            local text, stop = "", at + 1
+            while true do
+                local quote = assert(source:find("'", stop, true), "unterminated string in " .. source)
+                text = text .. source:sub(stop, quote - 1)
+                if source:sub(quote + 1, quote + 1) == "'" then text, stop = text .. "'", quote + 2 else at = quote + 1 break end
+            end
+            tokens[#tokens + 1] = { kind = "value", value = text }
+        elseif source:sub(at, at + 1):match("^[=!]=") or source:sub(at, at + 1) == "&&" or source:sub(at, at + 1) == "||" then
+            tokens[#tokens + 1] = { kind = source:sub(at, at + 1) }
+            at = at + 2
+        elseif c == "!" or c == "(" or c == ")" then
+            tokens[#tokens + 1] = { kind = c }
+            at = at + 1
+        else
+            local word = assert(source:match("^[%w_%.%-]+", at), "cannot read expression at: " .. source:sub(at))
+            at = at + #word
+            if word == "true" then tokens[#tokens + 1] = { kind = "value", value = true }
+            elseif word == "false" then tokens[#tokens + 1] = { kind = "value", value = false }
+            elseif word == "null" then tokens[#tokens + 1] = { kind = "value", value = nil }
+            elseif tonumber(word) then tokens[#tokens + 1] = { kind = "value", value = tonumber(word) }
+            else tokens[#tokens + 1] = { kind = "value", value = context[word] } end
+        end
+    end
+    local pos = 1
+    local function Truthy(v) return not (v == nil or v == false or v == 0 or v == "") end
+    local function Equal(a, b)
+        if type(a) == "string" and type(b) == "string" then return a:lower() == b:lower() end
+        return a == b
+    end
+    local Or
+    local function Primary()
+        local token = assert(tokens[pos], "expression ends early: " .. source)
+        pos = pos + 1
+        if token.kind == "value" then return token.value end
+        if token.kind == "!" then return not Truthy(Primary()) end
+        if token.kind == "(" then
+            local v = Or()
+            assert(tokens[pos] and tokens[pos].kind == ")", "missing ) in " .. source)
+            pos = pos + 1
+            return v
+        end
+        error("unexpected " .. token.kind .. " in " .. source)
+    end
+    local function Compare()
+        local left = Primary()
+        while tokens[pos] and (tokens[pos].kind == "==" or tokens[pos].kind == "!=") do
+            local op = tokens[pos].kind
+            pos = pos + 1
+            local right = Primary()
+            if op == "==" then left = Equal(left, right) else left = not Equal(left, right) end
+        end
+        return left
+    end
+    local function And()
+        local left = Compare()
+        while tokens[pos] and tokens[pos].kind == "&&" do
+            pos = pos + 1
+            local right = Compare()
+            if Truthy(left) then left = right end
+        end
+        return left
+    end
+    function Or()
+        local left = And()
+        while tokens[pos] and tokens[pos].kind == "||" do
+            pos = pos + 1
+            local right = And()
+            if not Truthy(left) then left = right end
+        end
+        return left
+    end
+    local result = Or()
+    assert(pos == #tokens + 1, "trailing tokens in " .. source)
+    return result
+end
+
+-- What the packager step receives as args for a run, with every ${{ }} evaluated.
+local function PackagerArgs(context)
+    local workflow = ReadFile(".github/workflows/release.yml"):gsub("\r\n", "\n")
+    local step = assert(workflow:match("uses: BigWigsMods/packager@.-\n(.-)\n%s*\n"), "no packager step")
+    local args = assert(step:match("args:%s*>%-?\n(.*)$"), "no args block in the packager step")
+    return (args:gsub("%${{(.-)}}", function(expr)
+        local value = EvalExpression(expr, context)
+        if value == nil then return "" end
+        return tostring(value)
+    end))
+end
+
+local function HasDryRunFlag(args)
+    for word in args:gmatch("%S+") do if word == "-d" then return true end end
+    return false
+end
+
+-- The evaluator itself, on GitHub's documented examples of && and || returning operands.
+function TestRelease:test_the_expression_evaluator()
+    lu.assertEquals(EvalExpression("true && '' || '-d'", {}), "-d")
+    lu.assertEquals(EvalExpression("'a' == 'A' && 'yes' || 'no'", {}), "yes")
+    lu.assertEquals(EvalExpression("x.y != 'true' && '-d' || ''", { ["x.y"] = "false" }), "-d")
+    lu.assertEquals(EvalExpression("x.y != 'true' && '-d' || ''", { ["x.y"] = "true" }), "")
+    lu.assertEquals(EvalExpression("!(a == 'push') && 'n' || 'p'", { a = "push" }), "p")
+    lu.assertNil(EvalExpression("missing.value", {}))
+end
+
+-- Runs Release.Main the way the workflow's check step does, on temp files, and returns
+-- its exit code, the outputs it wrote to GITHUB_OUTPUT (as a table) and the changelog
+-- it wrote. print, stderr and os.getenv are swapped for the call and restored.
+local function RunMain(event, ref, listed, notesText)
     local base = os.tmpname()
     local function Write(path, text) local f = assert(io.open(path, "w")) f:write(text) f:close() end
     local function Read(path)
@@ -277,35 +416,85 @@ function TestRelease:test_the_entry_point_tells_the_workflow_whether_to_publish(
     end
     local toc, notes, versions, out, output = base .. "-toc", base .. "-notes", base .. "-versions", base .. "-out", base .. "-output"
     Write(toc, Toc("0.7.0"))
-    Write(notes, NOTES_070)
-    local function Run(listed, ref, notesText)
-        Write(versions, listed .. "\n")
-        Write(notes, notesText or NOTES_070)
-        Write(output, "")
-        os.remove(out)
-        return Release.Main({ "--ref", ref or "refs/tags/v0.7.0", "--toc", toc, "--notes", notes,
-            "--versions", versions, "--out", out })
-    end
+    Write(notes, notesText or NOTES_070)
+    Write(versions, listed .. "\n")
+    Write(output, "")
     local realGetenv, realPrint, realStderr = os.getenv, print, io.stderr
     os.getenv = function(name) if name == "GITHUB_OUTPUT" then return output end return realGetenv(name) end
     print = function() end
     io.stderr = { write = function() end }
-    local ok, err = pcall(function()
-        lu.assertEquals(Run("1.60.1"), 0, "a clean release tag")
-        lu.assertEquals(Read(output), "publish=true\n")
-        lu.assertEquals(Read(out), "- Fixed the frames.\n")
-        lu.assertEquals(Run("1.59.0"), 1, "a release tag whose game version is not listed")
-        lu.assertEquals(Read(output), "", "a failed stop writes no publish line")
-        lu.assertNil(Read(out), "a failed stop writes no changelog")
-        -- A pull request (build-only): green and publish=false when clean, red when
-        -- the toc version's notes are missing (Architect's ruling, 2026-11-15).
-        lu.assertEquals(Run("1.60.1", "refs/pull/7/merge"), 0, "a clean pull request")
-        lu.assertEquals(Read(output), "publish=false\n")
-        lu.assertEquals(Read(out), "- Fixed the frames.\n")
-        lu.assertEquals(Run("1.60.1", "refs/pull/7/merge", NOTES_NO_070), 1, "a pull request without the toc version's notes")
-        lu.assertEquals(Read(output), "", "a red pull request writes no publish line")
-    end)
+    local ok, code = pcall(Release.Main, { "--event", event, "--ref", ref, "--toc", toc, "--notes", notes,
+        "--versions", versions, "--out", out })
     os.getenv, print, io.stderr = realGetenv, realPrint, realStderr
+    local outputs, changelog = {}, Read(out)
+    for line in (Read(output) or ""):gmatch("[^\n]+") do
+        local key, value = line:match("^([%w_]+)=(.*)$")
+        if key then outputs[key] = value end
+    end
     for _, path in ipairs({ base, toc, notes, versions, out, output }) do os.remove(path) end
-    assert(ok, err)
+    assert(ok, code)
+    return code, outputs, changelog
+end
+
+-- What the packager step receives after the check step wrote `outputs`.
+local function ArgsAfter(event, ref, outputs)
+    local context = { ["github.event_name"] = event, ["github.ref"] = ref }
+    for key, value in pairs(outputs) do context["steps.check.outputs." .. key] = value end
+    return PackagerArgs(context)
+end
+
+-- Fix round 1, the event table: the check step (Release.Main with the event and ref
+-- the workflow passes) and the packager's args evaluated from its outputs, end to end.
+-- Only a pushed release tag with clean stops uploads (S1, AC1); a hand start on the
+-- same tag (S24, AC5), another v-tag, a pull request and a branch build with -d; a
+-- release tag with a failed stop goes red before the packager (AC6).
+function TestRelease:test_the_event_table_from_check_to_packager()
+    local rows = {
+        { event = "push", ref = "refs/tags/v0.7.0", clean = true, exit = 0, dryRun = false },
+        { event = "push", ref = "refs/tags/v0.7.0", clean = false, exit = 1 },
+        { event = "push", ref = "refs/tags/v0.7.0-beta1", clean = true, exit = 0, dryRun = true },
+        { event = "pull_request", ref = "refs/pull/7/merge", clean = true, exit = 0, dryRun = true },
+        { event = "workflow_dispatch", ref = "refs/tags/v0.7.0", clean = true, exit = 0, dryRun = true },
+        { event = "workflow_dispatch", ref = "refs/heads/main", clean = true, exit = 0, dryRun = true },
+    }
+    for _, row in ipairs(rows) do
+        local label = row.event .. " " .. row.ref .. (row.clean and " clean" or " with a failed stop")
+        local code, outputs = RunMain(row.event, row.ref, row.clean and "1.60.1" or "1.59.0")
+        lu.assertEquals(code, row.exit, label .. ": exit code")
+        if row.exit ~= 0 then
+            -- The step fails, so the packager never runs; nothing may say publish either.
+            lu.assertNotEquals(outputs.publish, "true", label .. ": publish output")
+        else
+            local args = ArgsAfter(row.event, row.ref, outputs)
+            lu.assertEquals(HasDryRunFlag(args), row.dryRun, label .. ": packager args '" .. args .. "'")
+        end
+    end
+    -- How line 160: -d is the fail-safe default. A check step that wrote no outputs at
+    -- all (or anything but publish=true) must still leave the packager on -d.
+    for _, outputs in ipairs({ {}, { publish = "false" }, { publish = "" } }) do
+        local args = ArgsAfter("push", "refs/tags/v0.7.0", outputs)
+        lu.assertTrue(HasDryRunFlag(args), "outputs without publish=true must give -d: '" .. args .. "'")
+    end
+end
+
+-- The check step's other outputs: the changelog it writes for the packager and the
+-- publish flag, on a clean release tag, a red one and a clean and a red pull request.
+function TestRelease:test_the_entry_point_tells_the_workflow_whether_to_publish()
+    local code, outputs, changelog = RunMain("push", "refs/tags/v0.7.0", "1.60.1")
+    lu.assertEquals(code, 0, "a clean release tag")
+    lu.assertEquals(outputs.publish, "true")
+    lu.assertEquals(changelog, "- Fixed the frames.\n")
+    code, outputs, changelog = RunMain("push", "refs/tags/v0.7.0", "1.59.0")
+    lu.assertEquals(code, 1, "a release tag whose game version is not listed")
+    lu.assertNil(outputs.publish, "a failed stop writes no publish line")
+    lu.assertNil(changelog, "a failed stop writes no changelog")
+    -- A pull request (build-only): green and publish=false when clean, red when the
+    -- toc version's notes are missing (Architect's ruling, 2026-11-15).
+    code, outputs, changelog = RunMain("pull_request", "refs/pull/7/merge", "1.60.1")
+    lu.assertEquals(code, 0, "a clean pull request")
+    lu.assertEquals(outputs.publish, "false")
+    lu.assertEquals(changelog, "- Fixed the frames.\n")
+    code, outputs = RunMain("pull_request", "refs/pull/7/merge", "1.60.1", NOTES_NO_070)
+    lu.assertEquals(code, 1, "a pull request without the toc version's notes")
+    lu.assertNil(outputs.publish, "a red pull request writes no publish line")
 end

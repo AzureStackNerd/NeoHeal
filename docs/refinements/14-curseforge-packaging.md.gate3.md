@@ -40,15 +40,18 @@ form is also covered by the same rule: `vX.Y.Z` publishes, everything else build
 
 | Site (file:line) | What it changes | Serves | Docs that describe it |
 | --- | --- | --- | --- |
-| `.github/workflows/release.yml:1` | the release workflow: three starts, the Lua install, the suite, the token/versions step, the stops, the packager with `-d` unless publishing, the ZIP listing | S1, S5, S23, S24, AC1, AC5, AC6 | `docs/curseforge.md` ("Publishing a release"), `docs/README.md` |
+| `.github/workflows/release.yml:1` | the release workflow: three starts, the Lua install, the suite, the token/versions step (which passes `GITHUB_EVENT_NAME`), the stops, the packager with `-d` unless publishing, the ZIP listing | S1, S5, S23, S24, AC1, AC5, AC6 | `docs/curseforge.md` ("Publishing a release"), `docs/README.md` |
+| `.github/workflows/release.yml:99` | the packager's `-d` expression, `publish != 'true' && '-d' \|\| ''`, so anything but a literal `true` gives `-d` | S1, S24, AC1, AC5 | `docs/curseforge.md` ("Publishing a release") |
 | `.pkgmeta:1` | the packager's ship list (`ignore:`), the manual changelog path and its Markdown markup | S8, S9, S11, AC2, AC3 | `docs/curseforge.md` ("Building the ZIP by hand") |
 | `.gitattributes:1` | the header comment says the automatic release uses `.pkgmeta` instead, and `/.github` joins the hand route's ship list at line 9 | S9, AC2 | `docs/curseforge.md` ("Building the ZIP by hand") |
 | `.gitattributes:12` | `/.pkgmeta export-ignore`: the hand route must leave out the packager's config, which `git archive` ships otherwise | S9, AC2 | `docs/curseforge.md` ("Building the ZIP by hand") |
 | `.gitignore:1` | `.release/`, the packager's build folder | S8 | `docs/curseforge.md` ("Building the ZIP by hand") |
 | `NeoHeal.toc:10` | `## X-Curse-Project-ID: 1726356` for the upload and the stop | S18, AC1 | `docs/curseforge.md` ("Publishing a release") |
 | `spec/release.lua:1` | the stops as code: tag action, tag against toc, notes, project id, game version, both ship lists, the workflow's entry point | S1, S3, S4, S6, S10, S11, S12, S13, S14, S15, S16, S17, S18, AC2, AC3, AC4, AC5, AC6 | `docs/curseforge.md` ("Publishing a release"), `docs/README.md` |
+| `spec/release.lua:252` | the publish decision takes the event as well as the ref: a hand start on a version tag publishes nothing | S1, S24, AC1, AC5 | `docs/curseforge.md` ("Publishing a release") |
 | `spec/run.lua:10` | `release_test` joins the suite's file list, so the tests run at all (a spec file missing from that list never runs) | AC1 to AC6, S23 | `CLAUDE.md` (the test command), `docs/extending.md` (a new spec file is listed in `spec/run.lua`) |
 | `docs/curseforge.md:76` | the release procedure, the notes' heading contract, the file and its changelog, the hand route as fallback | S22, AC1, AC3 | `docs/README.md` |
+| `docs/curseforge.md:93` | recovery: re-run for a cause outside the repository, move the tag to the fixed commit for one inside it; "Run workflow" never publishes | S20, AC6 | `docs/README.md` |
 | `docs/README.md:14` | the row for curseforge.md | S22 | itself |
 
 ## Done and verified

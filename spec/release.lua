@@ -242,21 +242,27 @@ function Release.Problems(input)
     return problems
 end
 
--- What one run does: publish, or build and stop. `publish` is true only for a
--- plain release tag whose checks all pass, and `notice` explains a run that
--- publishes nothing without being in error, which is every run that is not a
--- release tag. The checks run on every start, not only on a release tag: a pull
--- request and a hand start exist to prove the release path without publishing, and
--- a stop that only ran for real would first be exercised by a live release. A run
--- with a problem is red whatever started it, so a green run never carries an error.
+-- What one run does: publish, or build and stop. `publish` is true only for a release
+-- version tag pushed as a tag (`event` "push"); a hand start on the same ref, a pull
+-- request and every other tag publish nothing, and `notice` says why. The checks run
+-- on every start, not only on a release tag: a pull request and a hand start exist to
+-- prove the release path without publishing, and a stop that only ran for real would
+-- first be exercised by a live release. A run with a problem is red whatever started
+-- it, so a green run never carries an error.
+--
+-- The event is an input as much as the ref is: "Run workflow" on a version tag gives
+-- the same GITHUB_REF as a tag push and must not publish.
 function Release.Check(input)
     local result = { action = "build-only", publish = false, problems = {}, notice = nil }
+    local event = input.event or "unknown"
     local tag = Release.TagOf(input.ref)
     local releaseVersion = Release.ReleaseTagVersion(tag)
     if not tag then
         result.notice = "a run without a release tag publishes nothing"
     elseif not releaseVersion then
         result.notice = "not a release tag, nothing published"
+    elseif event ~= "push" then
+        result.notice = "only a tag push publishes; nothing published for a " .. event .. " run"
     else
         result.action = Release.TagAction(tag)
     end
@@ -265,7 +271,7 @@ function Release.Check(input)
     result.version = releaseVersion or Release.TocField(input.toc, "Version")
     result.problems = Release.Problems({ tagVersion = releaseVersion, version = result.version,
         toc = input.toc, notes = input.notes, versions = input.versions })
-    result.publish = releaseVersion ~= nil and result.problems[1] == nil
+    result.publish = event == "push" and releaseVersion ~= nil and result.problems[1] == nil
     return result
 end
 
@@ -285,7 +291,7 @@ function Release.Main(argv)
     while argv[index] do
         local key, value = argv[index]:match("^%-%-(.+)$"), argv[index + 1]
         if not key or not value then
-            io.stderr:write("usage: lua spec/release.lua --ref <ref> --versions <file> --out <file>\n")
+            io.stderr:write("usage: lua spec/release.lua --event <event> --ref <ref> --versions <file> --out <file>\n")
             return 2
         end
         options[key] = value
@@ -297,7 +303,7 @@ function Release.Main(argv)
             if line:match("%S") then versions[#versions + 1] = (line:gsub("%s+$", "")) end
         end
     end
-    local result = Release.Check({ ref = options.ref, toc = ReadFile(options.toc),
+    local result = Release.Check({ event = options.event, ref = options.ref, toc = ReadFile(options.toc),
         notes = ReadFile(options.notes), versions = versions })
     local interface = Release.TocInterface(ReadFile(options.toc))
     local gameVersion = interface and Release.VersionFromInterface(interface)

@@ -75,6 +75,8 @@ jobs:
       # The stops: the tag against the toc's version, the notes, the project id and
       # the game version. It writes the version's notes to .release/CHANGELOG.md for
       # the packager's manual-changelog, and tells the next step whether to publish.
+      # The event matters as much as the ref: a hand start on a version tag has the
+      # same GITHUB_REF as a tag push, so only the event tells the two apart.
       - name: Check the release
         id: check
         env:
@@ -82,6 +84,7 @@ jobs:
         run: |
           mkdir -p .release
           lua5.4 spec/release.lua \
+            --event "$GITHUB_EVENT_NAME" \
             --ref "$GITHUB_REF" \
             --versions forever-versions.txt \
             --out .release/CHANGELOG.md
@@ -94,9 +97,14 @@ jobs:
         env:
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
         with:
+          # -d unless the check step printed exactly "publish=true". The test is
+          # written so that -d sits in the truthy middle position: anything but a
+          # literal true, a missing output included, gives -d. The first version of
+          # this line wrote `publish == 'true' && '' || '-d'`, where the empty string
+          # is falsy too, so both branches gave -d and a release uploaded nothing.
           args: >-
             -n "{package-name}-{project-version}:{package-name}-{project-version}"
-            ${{ steps.check.outputs.publish == 'true' && '' || '-d' }}
+            ${{ steps.check.outputs.publish != 'true' && '-d' || '' }}
 
       # The packager never prints what it zipped. This list is the proof of the ZIP's
       # contents (S7 to S10), for every run.

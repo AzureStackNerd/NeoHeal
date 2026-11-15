@@ -92,12 +92,24 @@ A release publishes itself: push its version tag and the GitHub workflow
 
 A wrong version, a version without notes, a missing or refused token, and an Interface
 that CurseForge has no Forever version for all stop the run before anything is
-uploaded, and its log names the reason. Fix the cause and run the workflow again for
-the same tag, from the Actions page. Do not re-run a run that already published: it is
-green, and a second run puts a second file for that version in the players' list.
+uploaded, and its log names the reason.
 
-A pull request into `main` and a run started by hand both build the ZIP and stop before
-the upload, so the way a release is built can be checked without publishing anything.
+**When a run fails, how to fix it depends on where the cause is.**
+
+- The token, CurseForge's version list, or the network: fix it on that side, then use
+  "Re-run failed jobs" on the failed run. It rebuilds from the same commit and tag.
+- Something in the repository: the toc's version, the notes, the project ID. A
+  re-run would use the same commit, so the fix has to be on the tag: delete the tag
+  locally and on GitHub, tag the fixed commit, and push the tag again. That is a
+  release step, so it happens only on Remco's word.
+
+Do not re-run a run that already published: it is green, and a second run puts a second
+file for that version in the players' list.
+
+A pull request into `main` and "Run workflow" (a hand start) both build the ZIP and stop
+before the upload, so the way a release is built can be checked without publishing
+anything. "Run workflow" never publishes, even when it runs on a version tag: only a
+tag push does.
 
 ### The file and its changelog
 
