@@ -38,8 +38,8 @@ stops run on every start, and only the version match is skipped without a releas
 problems is red; a clean one is green. The 40 cells are now coded in `test_non_release_stops_table`, and the exit codes
 of a clean and a red pull request are in `test_the_entry_point_tells_the_workflow_whether_to_publish`. Both pass. They
 With the product owner's yes to 2 runs beyond the 15, both were seen red: M15a and M16b in "Site to test". The
-Developer reworded How line 158, and the Architect agreed. The two pull-request exit checks in the entry-point test
-have no mutation of their own.
+Developer reworded How line 158, and the Architect agreed. The entry-point test's pull-request checks were proved later by
+M19b.
 
 Earlier state, kept for the record: the 8 release-tag cells are coded and proved (`test_release_tag_stops_table`). The
 other 40 cells were held on the product owner's word until the Architect and the Developer settled which stops a
@@ -72,21 +72,25 @@ after the restore, equal to the working tree's at the time.
 | `spec/release.lua` `ReleaseTagVersion` | `test_only_a_release_version_tag_starts_a_release` | M13: `$` dropped; `release_test.lua:100: refs/tags/v0.7.0-beta1` | `1261c74` |
 | `spec/release.lua:267` (stops on every start) | `test_non_release_stops_table` | M15a: `; if not releaseVersion then result.problems = {} end` appended; `release_test.lua:109: refs/tags/v0.7.0-beta1 match=true notes=true listed=false: problems` | `1261c74` |
 | `spec/release.lua:265` (version from the toc without a release tag) | `test_non_release_stops_table` | M16b: `releaseVersion or "0.7.0"`; `release_test.lua:107: refs/tags/v0.7.0-beta1 match=false notes=true listed=true: version from the toc` | `1261c74` |
+| `.gitattributes:12` (`/.pkgmeta`) | `test_both_ship_lists_leave_out_the_same_entries` | M18: line deleted; `release_test.lua:181: expected: nil, actual: '.gitattributes does not leave out ".pkgmeta", which .pkgmeta ignores'` | `1e11c83` |
+| `spec/release.lua` `Release.Main` (`publish=` output) | `test_the_entry_point_tells_the_workflow_whether_to_publish` | M19b: `file:write("publish=true\n")`; `release_test.lua:310: ./spec/release_test.lua:303: expected:` (303 is `lu.assertEquals(Read(output), "publish=false\n")` for a clean pull request, re-raised by the test's `assert(ok, err)` after it restores `os.getenv`) | `1261c74` |
+| `spec/run.lua:10` (`release_test` in the list) | `TestSuiteList.test_release_tests_are_registered` (`spec/run.lua:16`) | M17b: `"release_test"` dropped from the list; `spec/run.lua:18: spec/release_test.lua is not in run.lua's list` | `fb092fb` |
 | `docs/curseforge.md:86` (`### 0.6.0` contract) | `test_the_real_notes_hold_the_toc_versions_section` | M14: `### 0.6.0 notes`; `release_test.lua:190: ### 0.6.0 sections` | `877f411` |
 | `docs/README.md:14` | none: a doc row, no behaviour | not mutated | n/a |
 
 Not proved by mutation: `test_the_shipped_files_are_the_toc_what_it_loads_and_LICENSE` needs `git ls-files`, so it
 cannot run in the copy (no `.git`). In the copy it fails on its own guard (`release_test.lua:168: git ls-files did not
 list NeoHeal.toc (0 files)`), which shows that an empty git output fails the row. Its rule is proved on synthetic lists
-by M12b. `test_the_entry_point_tells_the_workflow_whether_to_publish` (`Release.Main`) has no mutation of its own
-within the 15-run budget.
+by M12b. `Release.Main` was proved later by M19b, after the Scrum Master's gate-3 check (relay 19).
 
 ## Mutations
 
 Script: `C:/CODE/scratch/neoheal-14/mutate.sh`. It saves the file, changes exactly one whole line (the anchor must
 match one line), runs the row, then restores by copying the saved file back. It never uses git. 15 test runs, plus 2
-(M15a, M16b) on a refreshed copy with the product owner's yes. Every site file's working-tree hash equals its Proved-on
-hash at the end (rechecked after M16b).
+(M15a, M16b) on a refreshed copy with the product owner's yes, plus 4 for the Scrum Master's gaps (relay 19):
+M17, M17b, M18, M19b. M17 went red, but the script's output filter hid its `run.lua` failure line, so M17b re-ran it
+with the filter widened. M19 ran no test: its anchor matched no line. Total: 21 test runs. Every site file's
+working-tree hash equals its Proved-on hash at the end (rechecked after M19b). The suite passes: 267 tests, 0 failures.
 Anchors that matched no line or did not change the file ran no test: M1, M1b, M4, M7, M10, M12. The causes were Git
 Bash path conversion of a leading `/`, and lines the Developer moved. M11 was discarded: it went red with a Lua error
 (a nil concatenation), not on its assertion, and was redone as M11b.

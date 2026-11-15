@@ -11,4 +11,11 @@ for _, file in ipairs({ "spells_test", "clickcast_test", "options_test", "toolti
     dofile(root .. "/spec/" .. file .. ".lua")
 end
 
+-- The release stops guard every upload (spec/release_test.lua): a list without that
+-- file would only run fewer tests, so its absence fails here on an assertion.
+TestSuiteList = {}
+function TestSuiteList:test_release_tests_are_registered()
+    require("luaunit").assertNotNil(TestRelease, "spec/release_test.lua is not in run.lua's list")
+end
+
 os.exit(require("luaunit").LuaUnit.run())
