@@ -51,7 +51,7 @@ top-left corner and grow to the right and down.
 | Top right | Raid marker, role icon (main tank / main assist / tank / healer), leader crown or assist flag |
 | Bottom left | Health text: percentage, health missing (`-2340`), or off. "Dead" / "Offline" |
 | Bottom right | Up to 3 of **your own** HoTs with a cooldown swipe and optional countdown |
-| Bottom right, 3rd slot | Out of combat: grey icon with red edge = this member lacks your class's raid buff |
+| Bottom right, 3rd slot | Out of combat: grey icon with red edge = this member lacks your class's raid buff, or has 10% or less of it left |
 | Centre, below the name | Up to 2 raid debuffs (e.g. boss debuffs), 1.5× the HoT icon size |
 | Centre | Ready check answer, incoming resurrection, or incoming summon |
 | Left edge | Dispel strip in the debuff type's colour, only for types **you** can remove (Magic blue, Curse purple, Disease brown, Poison green) |
@@ -65,6 +65,14 @@ Regrowth. Other classes show no HoT icons.
 Missing buffs per class: Priest Fortitude (+ Divine Spirit if talented), Druid
 Mark of the Wild, Mage Arcane Intellect (not for warriors and rogues). Paladin
 blessings are left out on purpose.
+
+A buff that is running out counts as missing: 10% or less of its full duration
+left, so 3 minutes of a 30-minute buff and 6 of a 1-hour one. You can rebuff
+before the pull instead of losing it in the fight. The single and the group
+version count as one buff: Prayer of Fortitude with time left covers a Power
+Word: Fortitude that is running out. The icon appears when a buff starts running
+out, without waiting for any other change on the member. Not checked in the game
+yet.
 
 ## Click casting (per character)
 

@@ -23,7 +23,7 @@ Spells.lua           spellbook scan, spell ranks
 Dispel.lua           which debuff types you can remove; colour curve for the dispel strip
 AuraContainer.lua    Blizzard-drawn aura icons (the only way to show auras in combat)
 Hots.lua             your own HoT icons, bottom-right of each frame
-MissingBuffs.lua     "missing raid buff" icon and the cast-missing-buff click
+MissingBuffs.lua     "missing or running-out raid buff" icon and the cast-missing-buff click
 ClickCast.lua        bindings -> secure attributes, hover keys, auto-res
 UnitButton.lua       the look and live updates of one unit frame
 Layout.lua           secure group headers, arrangement, size presets, moving

@@ -26,7 +26,7 @@ Locales/enUS.lua → Core → Spells → Dispel → AuraContainer → Hots → M
 | **Dispel** | Debuff types the player can cure; colour curve and filter for the dispel strip | `UpdateKnownDispels`, `GetColorCurve`, `GetBorderFilters` |
 | **AuraContainer** | Wrapper around Blizzard's `CustomAuraContainerTemplate`; the shared countdown font | `Create`, `CreateDispelStrip`, `SetUnit`, `SetShown`, `AddTimedCooldown` |
 | **Hots** | Own-HoT icons (Lua-drawn out of combat, container in combat) | `Attach`, `SetUnit`, `Update`, `RefreshSizes`, `ShowPreview` |
-| **MissingBuffs** | Missing class-buff icon; `*spell-neobuff` attribute for the buff click | `Attach`, `Update`, `UpdateClick`, `ExplainClick` |
+| **MissingBuffs** | Missing or running-out class-buff icon, with a per-button re-check timer for the moment a buff starts running out; `*spell-neobuff` attribute for the buff click | `Attach`, `Update`, `UpdateClick`, `ExplainClick` |
 | **ClickCast** | Bindings ↔ secure attributes, hover keys, auto-res snippet, class defaults | `Initialize`, `Set`, `BuildAttributes`, `Apply`, `ApplyToButton`, `QueueApply`, `AddBindingsToTooltip`, `GetModifierPrefix`, `GetLeftClickAmount`, `MovesTheCharacter`, `CheckHoverKeys` |
 | **UnitButton** | Visuals and per-unit event handling of one frame | `CreateVisuals`, `Init`, `UpdateAllButtons`, `UpdateAllAuras`, `RefreshAuraContainers` |
 | **Layout** | Container, 8 group headers + main tank + pet header, arrangement, titles, move mode, size presets, test mode | `Create`, `Refresh`, `Arrange`, `FitToContent`, `SetTestMode`, `GetSize` |

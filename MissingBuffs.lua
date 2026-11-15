@@ -1,8 +1,9 @@
 -- Missing buffs: out of combat, a small icon on members who lack the raid buff
 -- your class gives (Fortitude, Mark of the Wild, Arcane Intellect), cast by
--- anyone. It is for buffing before a pull, and aura data is readable then; in
--- combat it goes away. It sits in the third HoT slot (bottom right): out of combat
--- a priest or druid has at most two HoTs of their own there.
+-- anyone, or whose buff is running out: 10% or less of its full duration left.
+-- It is for buffing before a pull, and aura data is readable then; in combat it
+-- goes away. It sits in the third HoT slot (bottom right): out of combat a priest
+-- or druid has at most two HoTs of their own there.
 -- Paladin blessings are left out: who gets which is decided per class, so
 -- "missing" has no single meaning.
 local _, NeoHeal = ...
@@ -33,6 +34,15 @@ local CLASS_BUFFS = {
 }
 -- Classes without mana, who don't need Arcane Intellect.
 local NO_MANA_CLASSES = { WARRIOR = true, ROGUE = true }
+
+-- A buff with this share of its full duration or less left counts as missing:
+-- 3 minutes of a 30-minute buff, 6 of a 1-hour one (Remco, 2026-11-15). 5% was
+-- dropped: 90 seconds is shorter than many pulls, and the icon only shows out of
+-- combat, so the buff would run out in the fight.
+local RUNNING_OUT = 0.1
+-- How long after a buff starts running out its button checks again: a moment
+-- past it, so the check sees it running out.
+local RECHECK_MARGIN = 0.5
 
 local ICON_SLOT = 3      -- counted from the right, like the HoT icons
 local BORDER_SIZE = 1
@@ -80,36 +90,70 @@ function MissingBuffs.Attach(button)
     button.missingBuffIcon = holder
 end
 
--- Collects the names of the unit's buffs into `found`. Returns false if the game
+-- Collects the unit's buffs into `found`: [name] = the moment (GetTime) it starts
+-- running out, or math.huge for a buff that doesn't run out. Of two buffs with
+-- one name the later moment counts. A duration the game hides counts as one that
+-- doesn't run out: better no icon than a wrong one. Returns false if the game
 -- hides aura data right now.
-local function ReadBuffNames(unit, found)
+local function ReadBuffs(unit, found)
     wipe(found)
     for index = 1, 40 do
         local ok, aura = pcall(C_UnitAuras.GetAuraDataByIndex, unit, index, "HELPFUL")
         if not ok or IsSecret(aura) then return false end
         if not aura then return true end
         if IsSecret(aura.name) then return false end
-        found[aura.name] = true
+        local runsOutAt = math.huge
+        local duration, expiration = aura.duration, aura.expirationTime
+        if not IsSecret(duration) and not IsSecret(expiration) and duration and expiration and duration > 0 then
+            runsOutAt = expiration - duration * RUNNING_OUT
+        end
+        if not found[aura.name] or runsOutAt > found[aura.name] then found[aura.name] = runsOutAt end
     end
     return true
 end
 
--- The first of your buffs this unit lacks, or nil.
+-- The first of your buffs this unit lacks or has running out, or nil and the
+-- moment the first of its buffs starts running out (nil if none will).
 local found = {}
 
 local function FindMissing(unit)
-    if not ReadBuffNames(unit, found) then return nil end
+    if not ReadBuffs(unit, found) then return nil end
+    local now = GetTime()
     local _, class = UnitClass(unit)
+    local recheckAt
     for _, buff in ipairs(MissingBuffs.known) do
         local wanted = not (buff.manaOnly and not IsSecret(class) and NO_MANA_CLASSES[class])
         if wanted then
-            local has = false
+            local lastsUntil   -- the latest of its names (single or group version)
             for name in pairs(buff.names) do
-                if found[name] then has = true break end
+                local runsOutAt = found[name]
+                if runsOutAt and (not lastsUntil or runsOutAt > lastsUntil) then lastsUntil = runsOutAt end
             end
-            if not has then return buff end
+            if not lastsUntil or lastsUntil <= now then return buff end
+            if lastsUntil ~= math.huge and (not recheckAt or lastsUntil < recheckAt) then recheckAt = lastsUntil end
         end
     end
+    return nil, recheckAt
+end
+
+-- A buff running out fires no event, so a button whose buffs all last checks
+-- itself again the moment the first one starts running out. A timer can't be
+-- cancelled with C_Timer.After, so every new moment replaces the one before
+-- through a token: an older timer finds it changed and does nothing. An update
+-- that finds the same moment keeps the pending timer, so the frequent UNIT_AURA
+-- updates in a raid don't pile up timers that wait for up to 54 minutes. None is
+-- scheduled in combat; leaving combat updates every button, which schedules again
+-- (Core.lua, PLAYER_REGEN_ENABLED).
+local function ScheduleRecheck(button, at)
+    if at and at == button.missingBuffRecheckAt then return end
+    local token = (button.missingBuffRecheck or 0) + 1
+    button.missingBuffRecheck, button.missingBuffRecheckAt = token, at
+    if not at then return end
+    C_Timer.After(at - GetTime() + RECHECK_MARGIN, function()
+        if button.missingBuffRecheck ~= token then return end
+        button.missingBuffRecheckAt = nil   -- fired: the update may need the same moment again
+        if button.unit then MissingBuffs.Update(button) end
+    end)
 end
 
 local function CanBeBuffed(unit)
@@ -180,9 +224,13 @@ end
 
 function MissingBuffs.Update(button)
     local icon = button.missingBuffIcon
-    local buff = NeoHeal.db.layout.showMissingBuffs and not MissingBuffs.inCombat and not InCombatLockdown()
-        and #MissingBuffs.known > 0 and CanBeBuffed(button.unit) and FindMissing(button.unit)
+    local buff, recheckAt
+    if NeoHeal.db.layout.showMissingBuffs and not MissingBuffs.inCombat and not InCombatLockdown()
+            and #MissingBuffs.known > 0 and CanBeBuffed(button.unit) then
+        buff, recheckAt = FindMissing(button.unit)
+    end
     button.missingBuff = buff or nil
+    ScheduleRecheck(button, recheckAt)
     if buff then
         Place(button)
         icon.texture:SetTexture(buff.icon)
