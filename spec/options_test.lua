@@ -177,3 +177,82 @@ function TestOptionsWindow:testTheBuiltPageRefreshesWhileItShows()
     self.ns.Options:RefreshClickCastingPage()
     lu.assertEquals(refreshes, 1)
 end
+
+-- Issue #15: the window title shows the version you run, read through the client
+-- from the TOC's "## Version" line. The expected version is read from the real
+-- NeoHeal.toc, so the test follows every release. Whether Forever's client has
+-- C_AddOns.GetAddOnMetadata is not checked here, only in game.
+local function TocVersion()
+    local file = assert(io.open(Support.root .. "/NeoHeal.toc", "r"))
+    local version
+    for line in file:lines() do
+        version = version or line:match("^##%s*Version%s*:%s*(.-)%s*$")
+    end
+    file:close()
+    return version
+end
+
+-- Builds the window with the given C_AddOns and returns its title label: the
+-- first font string made on the window frame, which has no TitleText.
+local function BuildWindowTitle(addOns)
+    local ns = Support.Load({ "Locales/enUS.lua", "Spells.lua", "ClickCast.lua", "Options.lua" })
+    menuBuilders, keyCaptureButtons = {}, {}
+    local titleLabel
+    CreateFrame = function(_, name)
+        local frame = FakeFrame()
+        if name == "NeoHealOptionsFrame" then
+            frame.CreateFontString = function()
+                local label = FakeFrame()
+                titleLabel = titleLabel or label
+                return label
+            end
+        end
+        return frame
+    end
+    UIParent, UISpecialFrames = FakeFrame(), {}
+    Round = function(value) return math.floor(value + 0.5) end
+    MinimalSliderWithSteppersMixin = { Label = { Right = 1 }, Event = { OnValueChanged = 1 } }
+    CreateMinimalSliderFormatter = function() end
+    ns.Layout = { GetSize = function() return {} end }
+    ns.ClickCast.QueueApply = function() end
+    ns.charDB = { bindings = {}, hoverKeys = {} }
+    ns.Spells:Scan()
+    C_AddOns = addOns
+    ns.Options:Create()
+    return titleLabel.text, ns.L
+end
+
+-- A client that knows NeoHeal's version only when asked for this addon by name.
+local function AddOnsWithVersion(version)
+    return { GetAddOnMetadata = function(addon, field)
+        if addon == "NeoHeal" and field == "Version" then return version end
+    end }
+end
+
+TestOptionsTitle = {}
+
+function TestOptionsTitle:tearDown()
+    C_AddOns = nil   -- the fake API has none; later spec files must not see this one
+end
+
+function TestOptionsTitle:testTheTitleShowsTheTocVersion()
+    local version = TocVersion()
+    lu.assertIsString(version, "NeoHeal.toc has no Version line")
+    local title, L = BuildWindowTitle(AddOnsWithVersion(version))
+    lu.assertEquals(title, L.OPTIONS_TITLE .. " (" .. version .. ")")
+end
+
+function TestOptionsTitle:testNoVersionKeepsThePlainTitle()
+    local title, L = BuildWindowTitle(AddOnsWithVersion(nil))
+    lu.assertEquals(title, L.OPTIONS_TITLE)
+end
+
+function TestOptionsTitle:testAnEmptyVersionKeepsThePlainTitle()
+    local title, L = BuildWindowTitle(AddOnsWithVersion(""))
+    lu.assertEquals(title, L.OPTIONS_TITLE)
+end
+
+function TestOptionsTitle:testAClientWithoutAddOnsKeepsThePlainTitle()
+    local title, L = BuildWindowTitle(nil)
+    lu.assertEquals(title, L.OPTIONS_TITLE)
+end

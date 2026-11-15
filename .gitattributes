@@ -3,5 +3,6 @@
 /docs export-ignore
 /spec export-ignore
 /CLAUDE.md export-ignore
+/.claude export-ignore
 /.gitignore export-ignore
 /.gitattributes export-ignore

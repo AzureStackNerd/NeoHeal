@@ -17,6 +17,9 @@ from green to red, and the raid size preset:
 - The NeoHeal icon in the addon compartment, the addon list beside the minimap,
   does the same: one click opens, another closes.
 - Esc > Options > AddOns > NeoHeal has a button that opens the same window.
+- The window title shows the version you run, read from the addon's `.toc`:
+  "NeoHeal Options (0.6.0)". An addon the client reports no version for keeps
+  the plain title.
 - `/neoheal debug` prints which HoT and raid marker data the game hides right
   now. Run it in combat to see what Forever hides.
 - `/neoheal clicks` turns click debugging on or off: every click on a frame

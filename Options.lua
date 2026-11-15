@@ -1,6 +1,6 @@
 -- The options window (/neoheal): a "Click Casting" page and a "Layout" page.
 -- The window is built on first open, so it costs nothing until then.
-local _, NeoHeal = ...
+local addonName, NeoHeal = ...
 local L = NeoHeal.L
 local ClickCast = NeoHeal.ClickCast
 
@@ -457,6 +457,19 @@ end
 ---------------------------------------------------------------------------
 -- The window
 ---------------------------------------------------------------------------
+
+-- The title, with the installed version behind it. The version comes from the
+-- TOC's "## Version" line through the client, never from a copy typed here: the
+-- TOC is the one place it lives, so it cannot drift from the file the client
+-- loads. A client that hands the addon no version (no C_AddOns, or no version
+-- line) keeps the plain title. C_AddOns.GetAddOnMetadata on Forever: the addon
+-- compartment code this addon already relies on is read by Blizzard the same
+-- way, but the call itself is not checked in game.
+local function TitleText()
+    local version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version")
+    if version == nil or version == "" then return L.OPTIONS_TITLE end
+    return format(L.OPTIONS_TITLE_VERSION, L.OPTIONS_TITLE, version)
+end
 function Options:ShowPage(index)
     for pageIndex, page in ipairs(self.pages) do
         page:SetShown(pageIndex == index)
@@ -509,7 +522,7 @@ function Options:Create()
         title = CreateLabel(frame, "")
         title:SetPoint("TOP", 0, -5)
     end
-    title:SetText(L.OPTIONS_TITLE)
+    title:SetText(TitleText())
 
     self.pages = { CreateClickCastingPage(frame), CreateLayoutPage(frame) }
     self.pageTabs = {}

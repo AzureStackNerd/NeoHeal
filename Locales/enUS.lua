@@ -16,6 +16,7 @@ NeoHeal.L = L
 L.ADDON_NAME = "NeoHeal"
 L.LOADED = "loaded. Type /neoheal to open the options."
 L.OPTIONS_TITLE = "NeoHeal Options"
+L.OPTIONS_TITLE_VERSION = "%s (%s)"   -- window title, the installed version in brackets
 L.OPEN_OPTIONS = "Open NeoHeal options"
 L.APPLY_AFTER_COMBAT = "In combat: changes are applied when combat ends."
 
