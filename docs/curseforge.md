@@ -84,6 +84,14 @@ NOTE: Inspired by HealBot which I loved to use for a long time
 
 The changelog per file, in Markdown like the description.
 
+### 0.6.0
+
+```markdown
+- New: frames for your target and your focus ("Show target frame" and "Show focus frame" on the Layout page, off by default). Heal someone you have targeted or focused with your click casting, also when they are not in your group. They show above the NeoHeal frames while that unit is friendly.
+- New: the missing-buff icon also shows when a member's raid buff from your class has 10% or less of its duration left (3 minutes of a 30-minute buff), so you can rebuff before the pull.
+- New: a healer at 20% mana or less shows a blue "OOM" on their frame ("Show low mana" on the Layout page).
+```
+
 ### 0.5.0
 
 ```markdown
