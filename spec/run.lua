@@ -7,8 +7,15 @@ local root = (arg and arg[0] or ""):match("^(.*)[/\\]spec[/\\]run%.lua$") or "."
 package.path = root .. "/spec/?.lua;" .. package.path
 require("support").root = root
 
-for _, file in ipairs({ "spells_test", "clickcast_test", "options_test", "tooltip_test", "modifiers_test", "clicktypes_test", "prediction_test", "hoverkeys_test", "compartment_test", "missingbuffs_test", "targetfocus_test", "lowmana_test" }) do
+for _, file in ipairs({ "spells_test", "clickcast_test", "options_test", "tooltip_test", "modifiers_test", "clicktypes_test", "prediction_test", "hoverkeys_test", "compartment_test", "missingbuffs_test", "targetfocus_test", "lowmana_test", "release_test" }) do
     dofile(root .. "/spec/" .. file .. ".lua")
+end
+
+-- The release stops guard every upload (spec/release_test.lua): a list without that
+-- file would only run fewer tests, so its absence fails here on an assertion.
+TestSuiteList = {}
+function TestSuiteList:test_release_tests_are_registered()
+    require("luaunit").assertNotNil(TestRelease, "spec/release_test.lua is not in run.lua's list")
 end
 
 os.exit(require("luaunit").LuaUnit.run())

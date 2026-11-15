@@ -6,3 +6,7 @@ desktop.ini
 .idea/
 *.bak
 *.tmp
+
+# The packager's build folder: the unpacked addon and the ZIP it makes, rebuilt on
+# every run.
+.release/

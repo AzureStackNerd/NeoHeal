@@ -11,7 +11,7 @@ Interface version `16001`, addon version `0.6.0`.
 | [forever-api.md](forever-api.md) | developers | The rules of the Forever client: combat lockdown, secret values, Blizzard-drawn auras. **Read this before changing code.** |
 | [saved-variables.md](saved-variables.md) | developers | `NeoHealDB` / `NeoHealCharDB` layout, defaults and migrations |
 | [extending.md](extending.md) | developers | Recipes: add a setting, a class's HoTs, a cure spell, a buff, a language, an event |
-| [curseforge.md](curseforge.md) | the maintainer | Publishing on CurseForge: project fields, texts to paste, building the release ZIP |
+| [curseforge.md](curseforge.md) | the maintainer | Publishing on CurseForge: what a release tag does, the project fields, texts to paste, building a ZIP by hand for a test build |
 
 ## Repository layout
 
