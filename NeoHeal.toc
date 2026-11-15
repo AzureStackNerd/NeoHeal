@@ -18,6 +18,7 @@ Hots.lua
 MissingBuffs.lua
 ClickCast.lua
 UnitButton.lua
+TargetFocusFrames.lua
 Layout.lua
 Preview.lua
 Blizzard.lua

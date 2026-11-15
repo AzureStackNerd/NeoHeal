@@ -246,3 +246,85 @@ function TestMissingBuffs:testInCombatNoRecheckRuns()
     FireDueTimers()
     lu.assertEquals(auraReads, 0, "the re-check from before combat still ran")
 end
+
+-- "Cast missing buff" in a raid: the group version (Prayer of Fortitude) for a
+-- member of your party or raid, the single version for anyone else, such as the
+-- target or focus frame on a player outside your group (issue #3). The group
+-- version needs the spell and its reagent, both present here.
+TestMissingBuffGroupVersion = {}
+
+local SINGLE, GROUP, CANDLE = 1243, 21562, 17029
+local GROUP_GLOBALS = { "UnitInRaid", "UnitInParty", "C_Item" }
+
+function TestMissingBuffGroupVersion:setUp()
+    self.saved = {}
+    for _, name in ipairs(GROUP_GLOBALS) do self.saved[name] = _G[name] end
+    local ns = Support.Load({ "Locales/enUS.lua" })
+    issecretvalue = function(value) return rawequal(value, SECRET) end   -- Core reads it when it loads
+    Support.LoadInto(ns, { "Core.lua", "Spells.lua", "MissingBuffs.lua" })
+    Support.SetKnown({ SINGLE, GROUP })
+    now, auras, timers = 1000, {}, {}
+    GetTime = function() return now end
+    C_Timer = { After = function() end }
+    C_UnitAuras = { GetAuraDataByIndex = function() return nil end }   -- nobody has the buff
+    C_Item = { GetItemCount = function(itemID) return itemID == CANDLE and 5 or 0 end }
+    UnitIsConnected = function() return true end
+    UnitIsDeadOrGhost = function() return false end
+    UnitIsPlayer = function() return true end
+    IsInRaid = function() return true end
+    UnitInRaid = function() return nil end      -- in nobody's group until a test says so
+    UnitInParty = function() return false end
+    ns.db = { layout = { showMissingBuffs = true } }
+    ns.Hots = { GetIconSize = function() return 10 end }
+    ns.UnitButton = { readyCheckActive = false }
+    ns.MissingBuffs.known = {
+        { names = { [FORTITUDE] = true, [PRAYER] = true }, spellID = SINGLE, groupSpellID = GROUP,
+          reagent = CANDLE, icon = "fortitude-icon" },
+    }
+    ns.MissingBuffs.inCombat = false
+    self.ns = ns
+end
+
+function TestMissingBuffGroupVersion:tearDown()
+    for _, name in ipairs(GROUP_GLOBALS) do _G[name] = self.saved[name] end
+end
+
+-- The spell the "Cast missing buff" click casts on a button for `unit`.
+function TestMissingBuffGroupVersion:ClickSpell(unit)
+    local button = FakeButton()
+    button.unit = unit
+    self.ns.MissingBuffs.Update(button)
+    lu.assertTrue(button.missingBuffIcon.shown, unit .. ": no icon for a missing buff")
+    return button:GetAttribute("*spell-neobuff")
+end
+
+function TestMissingBuffGroupVersion:testARaidMemberGetsTheGroupVersion()
+    UnitInRaid = function(unit) return unit == "raid5" and 5 or nil end   -- the game returns a raid index
+    lu.assertEquals(self:ClickSpell("raid5"), GROUP, "a raid member doesn't get the group version")
+end
+
+function TestMissingBuffGroupVersion:testAPartyMemberGetsTheGroupVersion()
+    UnitInParty = function(unit) return unit == "party2" end
+    lu.assertEquals(self:ClickSpell("party2"), GROUP, "a party member doesn't get the group version")
+end
+
+-- The target and focus frames on a player outside your group: the group version
+-- would fail there, the single one works.
+function TestMissingBuffGroupVersion:testTheTargetAndFocusOutsideYourGroupGetTheSingleVersion()
+    lu.assertEquals(self:ClickSpell("target"), SINGLE, "the target frame on an outsider gets the group version")
+    lu.assertEquals(self:ClickSpell("focus"), SINGLE, "the focus frame on an outsider gets the group version")
+end
+
+-- The target frame on a raid member is in your group: the group version, as on its own frame.
+function TestMissingBuffGroupVersion:testTheTargetFrameOnARaidMemberGetsTheGroupVersion()
+    UnitInRaid = function(unit) return unit == "target" and 5 or nil end
+    lu.assertEquals(self:ClickSpell("target"), GROUP, "the target frame on a raid member doesn't get the group version")
+end
+
+-- On maps where the game restricts addons the group answers can be secret: never
+-- tested, read as "not in your group", so the single version, which always works.
+function TestMissingBuffGroupVersion:testASecretGroupAnswerGetsTheSingleVersion()
+    UnitInRaid = function() return SECRET end
+    UnitInParty = function() return SECRET end
+    lu.assertEquals(self:ClickSpell("target"), SINGLE, "a secret group answer read as in your group")
+end

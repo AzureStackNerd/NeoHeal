@@ -30,6 +30,10 @@ What still works in combat:
   `button.content`, a plain child frame, because the secure button's own
   alpha is locked.
 - Showing and hiding `AuraContainer`s.
+- A state driver (`RegisterStateDriver(frame, "visibility", "[@target,help] show; hide")`)
+  shows and hides a secure frame by macro conditions; the game runs it. The
+  target and focus frames (`TargetFocusFrames.lua`) rely on it. That the focus
+  unit and these conditions work on Forever isn't checked in game yet.
 
 `Layout:PreCreateButtons()` creates all five buttons per group in advance:
 a button created in combat can't register clicks until combat ends.
@@ -70,6 +74,20 @@ Patterns used across the code:
   `UnitInRange`, raid target index (**always**, even out of combat;
   `SetRaidTargetIconTexture` still accepts it), sometimes roles and classes,
   `UnitGetIncomingHeals` (section 5).
+
+**`UnitInRange` answers only for your party and raid** (warcraft.wiki.gg,
+`API:UnitInRange`: "can only be queried on units in your party or raid"; outside
+a group even `UnitInRange("player")` gives `false, false`). The group frames can
+use it because every unit they show is in your group. The target and focus
+frames can't: their unit may be anyone, so a frame for someone outside your
+group would never fade. They judge range by the spell an unmodified left click
+casts on the unit instead, `C_Spell.IsSpellInRange(spellID, unit)`
+(`Blizzard_APIDocumentationGenerated/SpellDocumentation.lua` in
+[Gethe/wow-ui-source](https://github.com/Gethe/wow-ui-source), branch `live`):
+`true` in range, `false` out of it, `nil` when the check can't be made, and it
+takes any unit token as its target. Whether Forever's client hides that answer
+in combat isn't documented either way; the code hands a secret answer to
+`SetAlphaFromBoolean` and never tests it.
 
 ## 3. Auras: addons can't read them in combat
 

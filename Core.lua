@@ -28,6 +28,8 @@ local DEFAULTS = {
         showAggro = true,
         showTooltips = true,
         showPets = false,
+        showTargetFrame = false,   -- a frame for your target, above the group frames, while it is friendly
+        showFocusFrame = false,    -- the same for your focus
         mainTankPosition = "none",   -- "none", "first" (before group 1) or "last" (after the groups)
         hideBlizzardFrames = false,
         sortOrder = "index",       -- "index", "name", "role" or "class"
@@ -185,8 +187,15 @@ function NeoHeal:RAID_TARGET_UPDATE()
     self.UnitButton:UpdateRaidTargets()
 end
 
+-- The target frame shows the new target (TargetFocusFrames.lua); its unit
+-- attribute stays "target", so nothing else tells it.
 function NeoHeal:PLAYER_TARGET_CHANGED()
     self.UnitButton:UpdateTargetHighlights()
+    self.UnitButton:ReloadUnitButtons("target")
+end
+
+function NeoHeal:PLAYER_FOCUS_CHANGED()
+    self.UnitButton:ReloadUnitButtons("focus")
 end
 
 -- Your target picked another target (a boss switching to someone else): the red
@@ -252,7 +261,7 @@ eventFrame:RegisterUnitEvent("UNIT_TARGET", "target")
 for _, event in ipairs({ "PLAYER_LOGIN", "PLAYER_REGEN_ENABLED", "PLAYER_REGEN_DISABLED", "GROUP_ROSTER_UPDATE", "SPELLS_CHANGED",
                          "UNIT_PET", "RAID_TARGET_UPDATE", "PLAYER_TARGET_CHANGED", "PARTY_LEADER_CHANGED",
                          "READY_CHECK", "READY_CHECK_CONFIRM", "READY_CHECK_FINISHED", "PLAYER_ROLES_ASSIGNED",
-                         "UPDATE_BINDINGS" }) do
+                         "UPDATE_BINDINGS", "PLAYER_FOCUS_CHANGED" }) do
     -- Skip events this client doesn't know (registering one raises an error).
     if not C_EventUtils or C_EventUtils.IsEventValid(event) then
         eventFrame:RegisterEvent(event)

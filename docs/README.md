@@ -26,6 +26,7 @@ Hots.lua             your own HoT icons, bottom-right of each frame
 MissingBuffs.lua     "missing or running-out raid buff" icon and the cast-missing-buff click
 ClickCast.lua        bindings -> secure attributes, hover keys, auto-res
 UnitButton.lua       the look and live updates of one unit frame
+TargetFocusFrames.lua  the optional target and focus frames above the group frames
 Layout.lua           secure group headers, arrangement, size presets, moving
 Preview.lua          test mode: fake raid members
 Blizzard.lua         optionally hides Blizzard's party/raid frames

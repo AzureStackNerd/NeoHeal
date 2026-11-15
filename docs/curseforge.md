@@ -57,6 +57,7 @@ The frame under your mouse also shows how much your left click would heal: a lig
 ## Frames
 
 - One column per group, with separate sizes for party and raid. Optional: a group of your raid's main tanks, and pets.
+- Optional: a frame for your target and one for your focus, with the same click casting, to heal someone outside your group.
 - Class or health colors, incoming heals, shields, a low-health tint, and health as a percentage or as health missing.
 - Up to two debuffs you can't dispel, such as boss debuffs, and a colored strip for debuffs you can dispel.
 - Priests and Druids: your own HoTs and shields with timers. Priests, Druids and Mages: out of combat, an icon shows who lacks your raid buff or has little of it left.

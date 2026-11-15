@@ -1,7 +1,8 @@
 -- Raid frame layout: one secure group header per raid group (1-8), chained side
 -- by side, with two optional extra headers: main tanks before the groups and pets
 -- after them. Only groups with members take up room, so a party shows one column
--- and a full raid eight. Every group is a column; its members are the rows.
+-- and a full raid eight. Every group is a column; its members are the rows. The
+-- optional target and focus frames sit above them (TargetFocusFrames.lua).
 --
 -- Secure group headers are Blizzard's own building block. They add, remove and
 -- reorder unit buttons by themselves, including in combat when addons can't.
@@ -336,6 +337,7 @@ function Layout:Create()
         self.headers[group] = CreateGroupHeader(container, group)
     end
     self.petHeader = CreatePetHeader(container)
+    NeoHeal.TargetFocusFrames:Create(container, BUTTON_TEMPLATE)
     self:Refresh()
     self:PreCreateButtons()
 end
@@ -370,6 +372,9 @@ function Layout:Refresh()
     local size = self:GetSize()
     self:ApplyScale(size.scale)
     self:RestorePosition()
+    -- Before the test mode return: in test mode the real target and focus frames
+    -- hide and fake ones show in their place.
+    NeoHeal.TargetFocusFrames:Refresh()
 
     -- In test mode only the preview follows the settings; the headers catch up later.
     if self.testSize then

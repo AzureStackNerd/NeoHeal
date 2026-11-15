@@ -191,6 +191,8 @@ local LAYOUT_SETTINGS = {
     { kind = "checkbox", key = "showAggro",          label = L.SHOW_AGGRO },
     { kind = "checkbox", key = "showTooltips",       label = L.SHOW_TOOLTIPS },
     { kind = "checkbox", key = "showPets",           label = L.SHOW_PETS },
+    { kind = "checkbox", key = "showTargetFrame",    label = L.SHOW_TARGET_FRAME },
+    { kind = "checkbox", key = "showFocusFrame",     label = L.SHOW_FOCUS_FRAME },
     { kind = "checkbox", key = "hideBlizzardFrames", label = L.HIDE_BLIZZARD_FRAMES },
 }
 

@@ -107,12 +107,16 @@ L.SHOW_HEAL_PREDICTION = "Show left-click heal prediction"
 L.SHOW_AGGRO = "Show aggro"
 L.SHOW_TOOLTIPS = "Show tooltips"
 L.SHOW_PETS = "Show pets"
+L.SHOW_TARGET_FRAME = "Show target frame"
+L.SHOW_FOCUS_FRAME = "Show focus frame"
 L.HIDE_BLIZZARD_FRAMES = "Hide Blizzard group frames"
 
 -- Group titles above the frames (in a raid)
 L.GROUP_NUMBER = "Group %d"
 L.MAIN_TANKS = "Main tanks"
 L.PETS = "Pets"
+L.TARGET_FRAME = "Target"   -- above the target frame
+L.FOCUS_FRAME = "Focus"     -- above the focus frame
 
 -- Unit status
 L.DEAD = "Dead"

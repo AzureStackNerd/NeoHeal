@@ -7,14 +7,14 @@ addon namespace (`NeoHeal.Layout`, `NeoHeal.UnitButton`, ...). There are no
 globals besides the saved variables, the slash command, the addon compartment
 click handler the TOC names (`NeoHeal_OnAddonCompartmentClick`) and a few named
 frames (`NeoHealFrame`, `NeoHealGroup1..8`, `NeoHealMainTanks`, `NeoHealPets`,
-`NeoHealOptionsFrame`, `NeoHealResHandler`).
+`NeoHealTarget`, `NeoHealFocus`, `NeoHealOptionsFrame`, `NeoHealResHandler`).
 
 Load order (`NeoHeal.toc`) matters only at file scope. Most cross-module calls
 happen at runtime, after `PLAYER_LOGIN`.
 
 ```
 Locales/enUS.lua → Core → Spells → Dispel → AuraContainer → Hots → MissingBuffs
-→ ClickCast → UnitButton → Layout → Preview → Blizzard → Options
+→ ClickCast → UnitButton → TargetFocusFrames → Layout → Preview → Blizzard → Options
 ```
 
 ## Module responsibilities
@@ -28,7 +28,8 @@ Locales/enUS.lua → Core → Spells → Dispel → AuraContainer → Hots → M
 | **Hots** | Own-HoT icons (Lua-drawn out of combat, container in combat) | `Attach`, `SetUnit`, `Update`, `RefreshSizes`, `ShowPreview` |
 | **MissingBuffs** | Missing or running-out class-buff icon, with a per-button re-check timer for the moment a buff starts running out; `*spell-neobuff` attribute for the buff click | `Attach`, `Update`, `UpdateClick`, `ExplainClick` |
 | **ClickCast** | Bindings ↔ secure attributes, hover keys, auto-res snippet, class defaults | `Initialize`, `Set`, `BuildAttributes`, `Apply`, `ApplyToButton`, `QueueApply`, `AddBindingsToTooltip`, `GetModifierPrefix`, `GetLeftClickAmount`, `MovesTheCharacter`, `CheckHoverKeys` |
-| **UnitButton** | Visuals and per-unit event handling of one frame | `CreateVisuals`, `Init`, `UpdateAllButtons`, `UpdateAllAuras`, `RefreshAuraContainers` |
+| **UnitButton** | Visuals and per-unit event handling of one frame | `CreateVisuals`, `Init`, `UpdateAllButtons`, `UpdateAllAuras`, `RefreshAuraContainers`, `ReloadUnitButtons` |
+| **TargetFocusFrames** | The optional target and focus frames above the groups: secure unit buttons with a fixed unit, shown by a state driver; their fake versions in test mode | `Create`, `Refresh` |
 | **Layout** | Container, 8 group headers + main tank + pet header, arrangement, titles, move mode, size presets, test mode | `Create`, `Refresh`, `Arrange`, `FitToContent`, `SetTestMode`, `GetSize` |
 | **Preview** | Fake members for test mode, using `UnitButton.CreateVisuals` | `Show`, `Hide` |
 | **Blizzard** | Re-parents Blizzard group frames into a hidden frame | `ApplyHiding` |
@@ -40,7 +41,8 @@ Locales/enUS.lua → Core → Spells → Dispel → AuraContainer → Hots → M
    keys), run migrations. See [saved-variables.md](saved-variables.md).
 2. `Spells:Scan()` → `Dispel:UpdateKnownDispels()` → `MissingBuffs:UpdateKnownBuffs()`.
 3. `ClickCast:Initialize()` (class defaults on a character's first login).
-4. Out of combat: `Layout:Create()` → `ClickCast:Apply()`.
+4. Out of combat: `Layout:Create()` (which also calls `TargetFocusFrames:Create`)
+   → `ClickCast:Apply()`.
 5. Register the settings entry under Esc > Options > AddOns.
 
 ## How a unit frame comes to life
@@ -66,6 +68,30 @@ Layout:Create
 re-registers unit events for the new unit, points the aura containers at it
 (or queues building them), and calls `UpdateAll`.
 
+### The target and focus frames
+
+`TargetFocusFrames:Create` (from `Layout:Create`, out of combat) makes two
+buttons that no header owns, `NeoHealTarget` and `NeoHealFocus`, on the same
+`BUTTON_TEMPLATE` as the group buttons. It sets their unit attribute to
+`"target"` / `"focus"` and calls `UnitButton.Init`, so they join
+`UnitButton.buttons` and get every visual, hook, binding (`ClickCast:Apply`) and
+the res snippet. Their unit attribute never changes, so `SetUnit` doesn't run
+when the unit behind it does: `PLAYER_TARGET_CHANGED` and `PLAYER_FOCUS_CHANGED`
+call `UnitButton:ReloadUnitButtons(unit)`, which runs `SetUnit` again for the
+buttons with that unit (no secure attribute, so fine in combat) and asks their
+aura containers to redraw (whether a container follows the new unit by itself
+isn't checked in game). `UpdateTargetHighlight` never shows the white target
+border on the `"target"` button.
+
+`TargetFocusFrames:Refresh` (from `Layout:Refresh`, before its test-mode return)
+sizes and anchors both above the container, clear of the title bar and group
+labels (target left, focus one column right), and gives a frame whose option is
+on the state driver `[@target,help] show; hide` (or `@focus`), which the game
+runs in combat too. With its option off, or in test mode, it unregisters the
+driver and hides the button. Each has a title-frame label as its child, so the
+label shows with it. That the focus unit and these macro conditions work on
+Forever isn't checked in game.
+
 ### Updates
 
 `UpdateAll` calls one function per aspect: `ApplyStyle`, `UpdateIdentity`,
@@ -76,7 +102,15 @@ heal prediction and absorbs), `UpdatePower`, `UpdateRange`, `UpdateAuras`,
 
 Unit events map to these functions in `EVENT_UPDATES` (UnitButton.lua).
 `UNIT_AURA` is **batched**: it marks the button, and all marked buttons are
-scanned once after 0.1s. Range is also polled every second as a backup.
+scanned once after 0.1s. Range is the one thing also polled every second, as a
+backup for `UNIT_IN_RANGE_UPDATE`. That event carries a unit token and whether
+it is in range, and it belongs with the group range check `UnitInRange` (the
+wiki documents the party-or-raid limit for `UnitInRange`; for the event its scope
+isn't documented). Whether either says anything about a `target` or `focus` unit
+isn't checked in game, so the poll is what keeps those two frames current.
+`UpdateRange` uses `UnitInRange` for the group units and
+`C_Spell.IsSpellInRange` with the unmodified left-click spell
+(`ClickCast:GetLeftClickSpell`) for `target` and `focus`.
 
 Global events (Core.lua) fan out to the `UnitButton:Update*` loops over all
 buttons:
@@ -87,7 +121,8 @@ buttons:
 | `PLAYER_ROLES_ASSIGNED` | Update all buttons (role icon, healer-only power bar) |
 | `UNIT_PET` | Re-arrange (pet column) |
 | `PLAYER_REGEN_DISABLED/ENABLED` | Missing buffs off/on; refresh auras (switch Lua icons ↔ containers); run queued work |
-| `PLAYER_TARGET_CHANGED`, `UNIT_TARGET` (target) | Target / targeted borders |
+| `PLAYER_TARGET_CHANGED`, `UNIT_TARGET` (target) | Target / targeted borders; `PLAYER_TARGET_CHANGED` also reloads the target frame (`ReloadUnitButtons("target")`) |
+| `PLAYER_FOCUS_CHANGED` | Reloads the focus frame (`ReloadUnitButtons("focus")`) |
 | `RAID_TARGET_UPDATE`, `PARTY_LEADER_CHANGED` | Top icons |
 | `READY_CHECK*` | Centre icon; lingers 5s after the check ends |
 | `SPELLS_CHANGED` | Debounced 0.5s: rescan spells, dispels, buffs; re-apply bindings (highest rank); refresh the click casting rows if that page shows |
@@ -96,7 +131,8 @@ buttons:
 ## Layout
 
 - `Refresh()` applies **all** settings (out of combat only). It picks the size
-  preset, applies scale and position, then hides each header, sets its
+  preset, applies scale and position, places the target and focus frames
+  (`TargetFocusFrames:Refresh`), then hides each header, sets its
   attributes (size, sort, spacing) and shows it again. A visible header re-runs
   its layout on every attribute change and would error on half-applied
   settings. After that it calls `Arrange`, then refreshes HoT sizes and aura
@@ -140,7 +176,10 @@ charDB.bindings["shift-2"] = { action="spell", spellID=139, highestRank=true, ta
   virtual button `neotarget`, `neotarget-target` or `neotarget-targettarget`
   (following the slot's `unitsuffix`), each a `/target mouseover…` macro. For a
   `neomenu` click the game calls `button.neomenu` (`ClickCast.OpenUnitMenu`, set
-  by `ApplyToButton`) outside secure code.
+  by `ApplyToButton`) outside secure code. For the group units it picks the menu
+  by unit type; for `target` and `focus` it asks the game what is behind the
+  unit (the file-local `DetectedMenu` in ClickCast.lua), as Blizzard's own
+  TargetFrame and FocusFrame do (source cited in the comment there).
 - **RES_SNIPPET** wraps each button's `OnClick` in the secure environment. On a
   dead friendly unit it redirects spell/macro clicks to the virtual button
   `neores`. It sends `neotarget` clicks to their `/target` macro, also on a dead
@@ -178,4 +217,7 @@ charDB.bindings["shift-2"] = { action="spell", spellID=139, highestRank=true, ta
 the exported helpers (`ApplyStyle`, `LayoutBars`, `AnchorAmountBars`,
 `ShowsPowerBar`, `ShowHealthText`, `ShowLowHealth`, `SetStatusIcons`,
 `Hots.ShowPreview`, `MissingBuffs.ShowPreview`) so it stays visually identical.
+The target and focus frames hide in test mode; `TargetFocusFrames:Refresh` shows
+a plain frame in the place of each whose option is on, filled with a fake member
+by `Preview.Decorate`.
 Test mode ends when the options window closes or combat starts (Options.lua).

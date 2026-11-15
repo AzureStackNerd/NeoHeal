@@ -491,6 +491,35 @@ end
 local MENUS_BY_UNIT_TYPE = { player = "SELF", party = "PARTY", raid = "RAID_PLAYER", pet = "PET",
                              partypet = "OTHERPET", raidpet = "OTHERPET" }
 
+-- The unit token "target" or "focus" says nothing about what is behind it: you,
+-- a group member, a pet, someone outside your group or an NPC. So the menu is
+-- read from the unit itself, as Blizzard's own frames do it. Taken from
+-- TargetFrame_OpenMenu and FocusFrame_OpenMenu in
+-- Blizzard_UnitFrame/Mainline/TargetFrame.lua (Gethe/wow-ui-source, branch
+-- "live", read on 2026-11-15: lines 584-634 and 1096-1103). The focus frame
+-- opens the focus menu whatever the focus is; the target frame picks one per
+-- unit. Two of its answers are left out: a battle pet (Forever's content has no
+-- pet battles [Likely], and a hunter's or warlock's pet is your pet or another
+-- player's pet) and ENEMY_PLAYER (these frames show friendly units only).
+-- Every answer here can be secret on maps where the game restricts addons
+-- (forever-api.md section 2); IsTrue then reads it as false, which gives the
+-- plain side of each choice. That FOCUS, TARGET, PLAYER and VEHICLE are the
+-- names Forever's client registers is not checked in game (SELF, PARTY,
+-- RAID_PLAYER, PET and OTHERPET are in use already).
+local function DetectedMenu(unit)
+    if unit == "focus" then return "FOCUS" end
+    if NeoHeal.IsTrue(UnitIsUnit(unit, "player")) then return "SELF" end
+    if NeoHeal.IsTrue(UnitIsUnit(unit, "vehicle")) then return "VEHICLE" end
+    if NeoHeal.IsTrue(UnitIsUnit(unit, "pet")) then return "PET" end
+    if NeoHeal.IsTrue(UnitIsOtherPlayersPet(unit)) then return "OTHERPET" end
+    if NeoHeal.IsTrue(UnitIsPlayer(unit)) then
+        if NeoHeal.IsTrue(UnitInRaid(unit)) then return "RAID_PLAYER" end
+        if NeoHeal.IsTrue(UnitInParty(unit)) then return "PARTY" end
+        return "PLAYER"
+    end
+    return "TARGET"   -- a friendly NPC
+end
+
 function ClickCast.OpenUnitMenu(frame, unit)
     -- Blizzard's menu click cancels a spell waiting for a target instead of opening
     -- the menu. SpellStopTargeting may be protected (not checked), so here the
@@ -506,6 +535,8 @@ function ClickCast.OpenUnitMenu(frame, unit)
         which = "SELF"
     elseif unitType == "raidpet" and NeoHeal.IsTrue(UnitIsUnit(unit, "pet")) then
         which = "PET"
+    elseif unitType == "target" or unitType == "focus" then
+        which = DetectedMenu(unitType)   -- the target and focus frames
     end
     if which then UnitPopup_OpenMenu(which, { ownerFrame = frame, unit = unit }) end
 end
@@ -567,6 +598,22 @@ end
 
 local function ToNumber(text)
     return tonumber((text:gsub(",", "")))
+end
+
+-- The spell an unmodified left click casts on the clicked unit, for the range check
+-- on the target and focus frames (UnitButton.UpdateRange): those units can be
+-- outside your group, where UnitInRange tells nothing (forever-api.md section 2).
+-- Always the no-modifier binding, whatever is held now: a fade must not change
+-- while you hold Shift. Read from the bindings last applied to the frames, like
+-- the tooltip, so the fade matches what that click casts. Nil when that click
+-- isn't a spell on the unit itself (a menu, a buff, a spell cast on the unit's
+-- target): the frame then never fades, which is the safe side. "Cast and also
+-- target" counts: that click casts on the unit too.
+function ClickCast:GetLeftClickSpell()
+    local bindings = self.appliedBindings or NeoHeal.charDB.bindings
+    local binding = bindings["1"]
+    if not binding or binding.action ~= "spell" or binding.target ~= "unit" then return nil end
+    return self:GetSpellValue(binding)
 end
 
 -- The heal prediction on a hovered frame (UnitButton.lua): how much a left click

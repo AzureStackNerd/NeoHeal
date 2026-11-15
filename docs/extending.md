@@ -123,7 +123,11 @@ nothing else: LuaUnit is included as `spec/luaunit.lua`. The game never loads
   text, and record each dropdown's menu builder and each key-capture button, so
   a test can click through a menu or press a key. Fake frames from
   `CreateFrame` keep their scripts and events, so a test can fire an event at
-  them. Not covered: how the unit frames look, and the layout. Anything that
+  them. `spec/targetfocus_test.lua` covers the target and focus frames on fake
+  frames: their unit and template, state driver, size, place, labels, test-mode
+  fakes, the reload on a new target or focus, the missing target border, and
+  that the TOC loads the module after the strings. Not
+  covered: how the unit frames look, and the group layout. Anything that
   depends on the real client stays on the checklist below.
 - Before trusting a new test, break the code it covers in a copy of the addon
   and check that the test fails.
@@ -138,5 +142,8 @@ In game:
   switch only after combat).
 - Enter combat with the feature active: no "secret value" or "action blocked" errors.
 - `/neoheal debug` and `/neoheal clicks` for aura and binding issues.
+- Target and focus frames on: target a friendly player outside the group, an
+  enemy, nobody; set and clear a focus; switch target in combat and click-cast
+  on the frame; a dead friendly target (res click).
 - The NeoHeal icon in the addon compartment: it shows NeoHeal's name and icon,
   and clicking it opens and closes the options window.

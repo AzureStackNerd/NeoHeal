@@ -30,6 +30,8 @@ reaches existing installs automatically.
 | `showAggro` | `true` | |
 | `showTooltips` | `true` | |
 | `showPets` | `false` | |
+| `showTargetFrame` | `false` | a frame for your target above the group frames, while it is friendly |
+| `showFocusFrame` | `false` | the same for your focus |
 | `mainTankPosition` | `"none"` | `"none"`, `"first"`, `"last"` |
 | `hideBlizzardFrames` | `false` | |
 | `sortOrder` | `"index"` | `"index"`, `"name"`, `"role"`, `"class"` |

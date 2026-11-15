@@ -165,3 +165,140 @@ function TestOpenUnitMenuSecretAnswer:testASecretAnswerGivesTheRaidMemberMenu()
     ns.ClickCast.OpenUnitMenu({}, "raid5")
     lu.assertEquals(Support.openedMenus[1][1], "RAID_PLAYER")
 end
+
+-- The target and focus frames (issue #3): the unit token says nothing about who
+-- is behind it, so the menu is read from the unit, as Blizzard's TargetFrame_OpenMenu
+-- and FocusFrame_OpenMenu do (ClickCast.lua DetectedMenu). Each test's world has
+-- one answer true (or secret) and every other one false.
+TestOpenUnitMenuTargetFocus = {}
+
+local SECRET_ANSWER = setmetatable({}, { __eq = function() error("compared a secret value") end })
+local UNIT_GLOBALS = { "UnitIsPlayer", "UnitIsOtherPlayersPet", "UnitInRaid", "UnitInParty" }
+
+function TestOpenUnitMenuTargetFocus:setUp()
+    self.saved = {}
+    for _, name in ipairs(UNIT_GLOBALS) do self.saved[name] = _G[name] end
+    local ns = Support.Load({ "Locales/enUS.lua" })
+    issecretvalue = function(value) return rawequal(value, SECRET_ANSWER) end   -- Core reads it when it loads
+    self.ClickCast = Support.LoadInto(ns, { "Core.lua", "Spells.lua", "ClickCast.lua" }).ClickCast
+    -- Nobody: not you, no pet, no player, in no group.
+    self.same = {}   -- UnitIsUnit(a, b) answers, keyed "a=b"; a unit is always itself
+    UnitIsUnit = function(a, b)
+        local answer = self.same[a .. "=" .. b]
+        if answer ~= nil then return answer end
+        return a == b
+    end
+    UnitIsPlayer = function() return false end
+    UnitIsOtherPlayersPet = function() return false end
+    UnitInRaid = function() return nil end
+    UnitInParty = function() return false end
+end
+
+function TestOpenUnitMenuTargetFocus:tearDown()
+    for _, name in ipairs(UNIT_GLOBALS) do _G[name] = self.saved[name] end
+end
+
+function TestOpenUnitMenuTargetFocus:Opened(unit)
+    Support.openedMenus = {}
+    self.ClickCast.OpenUnitMenu(self, unit)
+    local opened = Support.openedMenus[1]
+    return opened and opened[1]
+end
+
+function TestOpenUnitMenuTargetFocus:testTheTargetFrameOnYou()
+    self.same["target=player"] = true
+    lu.assertEquals(self:Opened("target"), "SELF", "your own menu on the target frame showing you")
+end
+
+function TestOpenUnitMenuTargetFocus:testTheTargetFrameOnYourVehicle()
+    self.same["target=vehicle"] = true
+    lu.assertEquals(self:Opened("target"), "VEHICLE", "the vehicle menu on the target frame showing your vehicle")
+end
+
+function TestOpenUnitMenuTargetFocus:testTheTargetFrameOnYourPet()
+    self.same["target=pet"] = true
+    lu.assertEquals(self:Opened("target"), "PET", "your pet's menu on the target frame showing your pet")
+end
+
+function TestOpenUnitMenuTargetFocus:testTheTargetFrameOnAnotherPlayersPet()
+    UnitIsOtherPlayersPet = function(unit) return unit == "target" end
+    lu.assertEquals(self:Opened("target"), "OTHERPET", "the other pet menu on the target frame showing another's pet")
+end
+
+function TestOpenUnitMenuTargetFocus:testTheTargetFrameOnARaidMember()
+    UnitIsPlayer = function(unit) return unit == "target" end
+    UnitInRaid = function(unit) return unit == "target" and 5 or nil end   -- the game returns a raid index
+    lu.assertEquals(self:Opened("target"), "RAID_PLAYER", "the raid member menu on the target frame showing a raid member")
+end
+
+function TestOpenUnitMenuTargetFocus:testTheTargetFrameOnAPartyMember()
+    UnitIsPlayer = function(unit) return unit == "target" end
+    UnitInParty = function(unit) return unit == "target" end
+    lu.assertEquals(self:Opened("target"), "PARTY", "the party menu on the target frame showing a party member")
+end
+
+function TestOpenUnitMenuTargetFocus:testTheTargetFrameOnAPlayerOutsideYourGroup()
+    UnitIsPlayer = function(unit) return unit == "target" end
+    lu.assertEquals(self:Opened("target"), "PLAYER", "the player menu on the target frame showing an outsider")
+end
+
+function TestOpenUnitMenuTargetFocus:testTheTargetFrameOnAFriendlyNPC()
+    lu.assertEquals(self:Opened("target"), "TARGET", "the target menu on the target frame showing an NPC")
+end
+
+-- The focus frame opens the focus menu whoever the focus is, also you or a raid member.
+function TestOpenUnitMenuTargetFocus:testTheFocusFrameOpensTheFocusMenu()
+    lu.assertEquals(self:Opened("focus"), "FOCUS", "the focus menu on the focus frame showing an NPC")
+    self.same["focus=player"] = true
+    UnitIsPlayer = function() return true end
+    UnitInRaid = function() return 5 end
+    lu.assertEquals(self:Opened("focus"), "FOCUS", "the focus menu on the focus frame showing you in a raid")
+end
+
+-- The menu belongs to the frame and the unit token, as for the group frames.
+function TestOpenUnitMenuTargetFocus:testTheMenuBelongsToTheFrameAndUnit()
+    Support.openedMenus = {}
+    self.ClickCast.OpenUnitMenu(self, "target")
+    lu.assertEquals(Support.openedMenus[1] and Support.openedMenus[1][2], { ownerFrame = self, unit = "target" })
+end
+
+-- On maps where the game restricts addons any of these answers can be secret: a
+-- secret answer is never tested and reads as "no", which gives the plain side of
+-- that choice. One secret answer per choice, every other answer "no".
+function TestOpenUnitMenuTargetFocus:testASecretYouAnswerIsNotYou()
+    self.same["target=player"] = SECRET_ANSWER
+    lu.assertEquals(self:Opened("target"), "TARGET", "a secret 'is it you' read as you")
+end
+
+function TestOpenUnitMenuTargetFocus:testASecretVehicleAnswerIsNoVehicle()
+    self.same["target=vehicle"] = SECRET_ANSWER
+    lu.assertEquals(self:Opened("target"), "TARGET", "a secret 'is it your vehicle' read as your vehicle")
+end
+
+function TestOpenUnitMenuTargetFocus:testASecretPetAnswerIsNotYourPet()
+    self.same["target=pet"] = SECRET_ANSWER
+    lu.assertEquals(self:Opened("target"), "TARGET", "a secret 'is it your pet' read as your pet")
+end
+
+function TestOpenUnitMenuTargetFocus:testASecretOtherPetAnswerIsNoPet()
+    UnitIsOtherPlayersPet = function() return SECRET_ANSWER end
+    lu.assertEquals(self:Opened("target"), "TARGET", "a secret 'another player's pet' read as a pet")
+end
+
+function TestOpenUnitMenuTargetFocus:testASecretPlayerAnswerIsAnNPC()
+    UnitIsPlayer = function() return SECRET_ANSWER end
+    lu.assertEquals(self:Opened("target"), "TARGET", "a secret 'is it a player' read as a player")
+end
+
+function TestOpenUnitMenuTargetFocus:testASecretRaidAnswerIsNotInYourRaid()
+    UnitIsPlayer = function() return true end
+    UnitInRaid = function() return SECRET_ANSWER end
+    UnitInParty = function() return true end
+    lu.assertEquals(self:Opened("target"), "PARTY", "a secret 'in your raid' read as in your raid")
+end
+
+function TestOpenUnitMenuTargetFocus:testASecretPartyAnswerIsNotInYourParty()
+    UnitIsPlayer = function() return true end
+    UnitInParty = function() return SECRET_ANSWER end
+    lu.assertEquals(self:Opened("target"), "PLAYER", "a secret 'in your party' read as in your party")
+end

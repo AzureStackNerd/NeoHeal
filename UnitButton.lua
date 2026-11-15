@@ -1,7 +1,8 @@
 -- The look and live updates of one unit button: health bar with incoming heals,
 -- resource bar, name, status text, range fading, dispel highlight, aggro, raid
 -- target icon and tooltip. The secure button itself is created by a group header
--- (see Layout.lua); this module decorates it and keeps it current.
+-- (see Layout.lua), or for the target and focus frames by TargetFocusFrames.lua;
+-- this module decorates it and keeps it current.
 local _, NeoHeal = ...
 local L = NeoHeal.L
 local IsSecret, IsTrue, IsFalse = NeoHeal.IsSecret, NeoHeal.IsTrue, NeoHeal.IsFalse
@@ -477,10 +478,48 @@ local function UpdatePower(button)
     end
 end
 
+-- The units no group header owns (TargetFocusFrames.lua). Their unit can be anyone,
+-- including someone outside your group, so they can't use UnitInRange: that answers
+-- only for your party and raid (forever-api.md section 2).
+local OWN_UNITS = { target = true, focus = true }
+
+-- Range by the spell an unmodified left click casts on the unit, which judges any
+-- unit: C_Spell.IsSpellInRange takes the unit as its target and is AllowedWhenTainted
+-- (Blizzard_APIDocumentationGenerated/SpellDocumentation.lua, Gethe/wow-ui-source
+-- branch "live", read on 2026-11-15). It gives true, false, or nil when the check
+-- can't be made (unknown spell, invalid unit); nil keeps the frame at full alpha, so
+-- a check that doesn't work never fades a frame that is in range.
+-- Whether Forever's client hides its answer in combat isn't documented either way.
+-- A secret answer goes to the game through SetAlphaFromBoolean, as for the group
+-- frames, so it is never tested or compared here. A secret nil can't be told from a
+-- secret false, and what the game makes of a secret nil isn't checked in game: if it
+-- reads it as false, that frame fades while it isn't out of range. That needs a
+-- hidden answer and a check that can't be made at the same moment, and the frame
+-- stays at full alpha whenever the answer is readable.
+local function UpdateOwnUnitRange(button)
+    local spellID = NeoHeal.ClickCast:GetLeftClickSpell()
+    if not spellID or not C_Spell.IsSpellInRange then
+        button.content:SetAlpha(1)
+        return
+    end
+    local inRange = C_Spell.IsSpellInRange(spellID, button.unit)
+    if IsSecret(inRange) then
+        if button.content.SetAlphaFromBoolean then
+            button.content:SetAlphaFromBoolean(inRange, 1, OUT_OF_RANGE_ALPHA)
+        end
+        return
+    end
+    button.content:SetAlpha((inRange == false) and OUT_OF_RANGE_ALPHA or 1)
+end
+
 local function UpdateRange(button)
     local unit = button.unit
     if IsTrue(UnitIsUnit(unit, "player")) then
         button.content:SetAlpha(1)
+        return
+    end
+    if OWN_UNITS[unit] then
+        UpdateOwnUnitRange(button)
         return
     end
 
@@ -649,7 +688,13 @@ end
 
 local function UpdateTargetHighlight(button)
     local unit = button.unit
-    ShowIfSameUnit(button.targetBorder, unit, "target")
+    -- The target frame (TargetFocusFrames.lua) always shows your target: a white
+    -- border there would say nothing. A plain string compare, never a secret.
+    if unit == "target" then
+        button.targetBorder:Hide()
+    else
+        ShowIfSameUnit(button.targetBorder, unit, "target")
+    end
     -- UnitCanAttack isn't secret. Only an enemy's target counts: a friendly
     -- target's target would be anyone.
     if IsTrue(UnitCanAttack("player", "target")) then
@@ -1141,6 +1186,26 @@ function UnitButton:RefreshAuraContainers()
         BuildDispelContainer(button)
         BuildRaidDebuffContainer(button)
         if button.unit then UpdateAuras(button) end   -- follows "Show raid debuffs"
+    end
+end
+
+-- The target and focus frames (TargetFocusFrames.lua) keep their unit token while
+-- the unit behind it changes, which no header reports. Core.lua calls this on
+-- PLAYER_TARGET_CHANGED and PLAYER_FOCUS_CHANGED, maybe in combat: it runs what a
+-- new unit runs (SetUnit touches no secure attribute) and asks its Blizzard-drawn
+-- aura icons to redraw, as whether they follow the switch by themselves isn't
+-- checked in game. Group buttons never have these units.
+local RELOADED_CONTAINERS = { "dispelContainer", "raidDebuffContainer", "hotContainer" }
+
+function UnitButton:ReloadUnitButtons(unit)
+    for button in pairs(self.buttons) do
+        if button.unit == unit then
+            SetUnit(button, unit)
+            for _, key in ipairs(RELOADED_CONTAINERS) do
+                local container = button[key]   -- nil without HoTs or cure spells
+                if container then pcall(container.UpdateAllAuras, container) end
+            end
+        end
     end
 end
 

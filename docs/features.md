@@ -24,7 +24,8 @@ from green to red, and the raid size preset:
 
 While the options window is open the frames are in **move mode**: a green
 overlay that you can drag. Outside move mode, **Ctrl + drag** a title ("NeoHeal"
-bar, or a "Group N" label in a raid) to move the frames. Nothing moves in
+bar, a "Group N" label in a raid, or the "Target" and "Focus" labels) to move
+the frames. Nothing moves in
 combat.
 
 ## The frames
@@ -38,6 +39,40 @@ top-left corner and grow to the right and down.
 - **Main tank group** (optional): raid members marked as Main Tank, before group
   1 or after everything. They also stay in their own group.
 - **Pets** (optional): their own column(s) after the groups.
+- **Target and focus** (optional, "Show target frame" and "Show focus frame"):
+  see below.
+
+### Target and focus frames
+
+One frame for your target and one for your focus, so you can heal someone who
+isn't in your group, or without looking for them in the raid. They look and
+click exactly like the group frames: the same bindings, hover keys, tooltip,
+heal prediction, HoTs, debuffs, range fade, missing buffs, and the res on a dead
+member. Each shows only while its unit exists and is friendly, and follows a
+new target or focus, also in combat.
+
+They sit above the frames, clear of the title bar and group labels: the target
+on the left, the focus to its right, each with a small "Target" or "Focus"
+label that Ctrl-drags the frames like the other titles. They have the button
+size of the size preset in use and move with the frames. Only the group frames
+are kept on screen, so with those against the top of the screen these two may
+end up off it (not checked in game). The target frame never shows the white
+"your target" border; the focus frame does when your focus is your target. Test
+mode shows both, with fake members, while their option is on.
+
+Showing them uses the game's macro conditions `[@target,help]` and
+`[@focus,help]`; that these and the focus work on Forever isn't checked in game
+yet.
+
+They fade out of range by the spell your left click casts on them, because the
+game's own range check answers only for party and raid members, where these
+frames are exactly the ones that need it
+([forever-api.md](forever-api.md) section 2). The spell is the one an
+unmodified left click casts, so the fade doesn't change while you hold a
+modifier. When that click isn't a spell on the unit itself (a menu, the missing
+buff), or the game can't judge that spell's range, the frame stays at full alpha
+instead of fading on a guess. Both are unchecked in game: whether Forever hides
+the range answer in combat, and whether it accepts every unit for it.
 
 ### What one frame shows
 
@@ -56,7 +91,7 @@ top-left corner and grow to the right and down.
 | Centre | Ready check answer, incoming resurrection, or incoming summon |
 | Left edge | Dispel strip in the debuff type's colour, only for types **you** can remove (Magic blue, Curse purple, Disease brown, Poison green) |
 | Top edge | Red line while the member has aggro |
-| Border | White: your current target. Red: who your hostile target is targeting |
+| Border | White: your current target (not on the target frame). Red: who your hostile target is targeting |
 | Whole frame | Fades to 40% when out of range |
 
 HoTs tracked per class: Priest Renew + Power Word: Shield, Druid Rejuvenation +
@@ -100,11 +135,18 @@ Actions:
     on the clicked unit.
   - NeoHeal opens the menu itself. An entry that needs Blizzard's secure code,
     such as Set Focus, may be blocked, and no menu opens while a spell waits for
-    a target.
+    a target. On the target and focus frames NeoHeal opens the menu Blizzard's
+    own frames open there: the focus menu on the focus frame, and on the target
+    frame one picked from what your target is (you, a pet, a party or raid
+    member, a player outside your group, or an NPC). That Forever's client
+    knows those menus isn't checked in game yet.
 - **Cast missing buff**: casts the buff whose icon shows on that frame. In a raid
-  it uses the group version if you know it and carry the reagent. Out of combat
-  only, and not during a ready check. Otherwise the click does nothing and
-  explains why in red at the top of the screen.
+  it uses the group version if you know it and carry the reagent, but only for a
+  party or raid member: that version is assumed to land on your own group only,
+  so on the target or focus frame of someone outside it the click casts the
+  single version instead. Out of combat only, and not during a ready check.
+  Otherwise the click does nothing and explains why in red at the top of the
+  screen.
 - **A spell** from your spellbook: "Highest rank" (follows new ranks you learn),
   "Highest rank -1" (the rank below that, also follows; useful as a cheaper,
   mana-efficient heal), or a fixed rank. The rank choices show only for spells
@@ -213,8 +255,9 @@ Left column:
 5 players edits Party and 10+ edits Raid.
 
 Right column (checkboxes): show when solo, raid debuffs, missing buffs, HoT
-timers, incoming heals, left-click heal prediction, aggro, tooltips, pets, hide
-Blizzard group frames (turning this off again needs a `/reload`).
+timers, incoming heals, left-click heal prediction, aggro, tooltips, pets, target
+frame, focus frame (both off by default), hide Blizzard group frames (turning
+this off again needs a `/reload`).
 
 Changes made in combat are applied when combat ends. The window shows a red
 notice while that is the case.

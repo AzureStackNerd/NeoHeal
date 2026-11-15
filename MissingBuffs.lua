@@ -177,12 +177,22 @@ local function GetReagentCount(itemID)
     return not IsSecret(count) and count or 0
 end
 
--- In a raid: the group version if you know it and carry its reagent (it buffs the
--- member's whole raid group at once), else the single one, so a click never fails
--- for a missing reagent.
-local function ChooseSpell(buff)
+-- The group version buffs the target's whole party or raid group at once, but it
+-- only lands on a member of your party or raid [Likely]: on the target or focus
+-- frame of someone outside your group the click would fail although the icon
+-- shows. So it is used for a group member you know it and carry the reagent for,
+-- and the single version everywhere else, which never fails that way.
+-- UnitInRaid and UnitInParty can be secret on maps where the game restricts
+-- addons (forever-api.md section 2); IsTrue then reads that as "not in your
+-- group", which casts the single version, the one that always works.
+local function InYourGroup(unit)
+    return NeoHeal.IsTrue(UnitInRaid(unit)) or NeoHeal.IsTrue(UnitInParty(unit))
+end
+
+-- In a raid: the group version for a group member, else the single one.
+local function ChooseSpell(buff, unit)
     local spellID = buff.spellID
-    if IsInRaid() and buff.groupSpellID and IsPlayerSpell(buff.groupSpellID)
+    if IsInRaid() and buff.groupSpellID and InYourGroup(unit) and IsPlayerSpell(buff.groupSpellID)
             and GetReagentCount(buff.reagent) > 0 then
         spellID = buff.groupSpellID
     end
@@ -194,7 +204,7 @@ function MissingBuffs.UpdateClick(button)
     local buff = button.missingBuff
     local spell
     if buff and not MissingBuffs.inCombat and not NeoHeal.UnitButton.readyCheckActive then
-        spell = ChooseSpell(buff)
+        spell = ChooseSpell(buff, button.unit)
     end
     if button:GetAttribute("*spell-neobuff") ~= spell then
         button:SetAttribute("*spell-neobuff", spell)

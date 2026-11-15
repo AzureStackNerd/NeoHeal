@@ -206,6 +206,7 @@ local function Decorate(frame, member)
     frame.targetedBorder:SetShown(member == 3)   -- the boss is about to hit a healer (a druid)
     frame.aggro:SetShown(NeoHeal.db.layout.showAggro and member == 1)   -- the first tank has aggro
 end
+Preview.Decorate = Decorate   -- the fake target and focus frames (TargetFocusFrames.lua) use it too
 
 -- The fake main tanks: the first warriors of the fake raid.
 local function GetMainTanks(size)
