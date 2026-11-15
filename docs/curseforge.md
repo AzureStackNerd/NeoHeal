@@ -83,6 +83,13 @@ NOTE: Inspired by HealBot which I loved to use for a long time
 
 The changelog per file, in Markdown like the description.
 
+### 0.5.0
+
+```markdown
+- New: NeoHeal is listed in the addon compartment, the addon list beside the minimap. Click it to open the options window, and again to close it.
+- Fix: with the options window open, keys that move your character, such as W, work again. The first time you opened the window after logging in or a /reload, W showed the "moves your character" warning instead of walking. That warning now only appears after you click Set key.
+```
+
 ### 0.4.1
 
 ```markdown
