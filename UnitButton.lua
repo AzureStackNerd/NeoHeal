@@ -326,6 +326,81 @@ local function UpdateLowHealth(button, isDeadOrOffline)
     tint:SetShown(ok)
 end
 
+-- Who counts as a healer, for "Resource bar: Healers only" and the low-mana text.
+-- Classic players rarely pick a role, so without one the class decides.
+local HEALER_CLASSES = { PRIEST = true, DRUID = true, PALADIN = true, SHAMAN = true }
+
+-- Whether a role and class make a healer (the preview uses it too).
+function UnitButton.IsHealer(role, class)
+    if role and role ~= "NONE" then return role == "HEALER" end
+    return HEALER_CLASSES[class] or false
+end
+
+-- Whether the button's unit counts as a healer. In combat the game may hide the
+-- role and the class. Should the role be hidden, keep what was last known (roles
+-- don't change in combat) rather than fall back to the class: a shadow priest
+-- would count for the length of the fight.
+local function IsHealerButton(button)
+    local unit = button.unit
+    if button.healerUnit ~= unit then button.healerUnit, button.healerShown = unit, nil end
+    local role = UnitGroupRolesAssigned and UnitGroupRolesAssigned(unit)
+    local class = IsTrue(UnitIsPlayer(unit)) and select(2, UnitClass(unit)) or nil   -- pets: no class
+    if IsSecret(role) then
+        if button.healerShown ~= nil then return button.healerShown end
+        role = nil
+    end
+    if IsSecret(class) then class = nil end
+    button.healerShown = UnitButton.IsHealer(role, class)
+    return button.healerShown
+end
+
+-- Low mana: a healer at 20% mana or less shows "OOM" over the middle of the health
+-- bar, so the raid's healers can cover for them or call a break. In combat mana can
+-- be secret, so a colour curve gives the text its alpha (visible up to the
+-- threshold, hidden above it); the result is secret too, and is handed straight to
+-- SetTextColor. That this client accepts a secret colour there isn't checked in
+-- game; the pcall below keeps the text hidden if it doesn't.
+local LOW_MANA_THRESHOLD = 0.2
+local LOW_MANA_COLOR = { 0.4, 0.75, 1 }
+-- Enum.PowerType.Mana: the bar to read. That a shapeshifted druid's own mana is
+-- readable under it isn't checked in game.
+local MANA = 0
+local lowManaCurve
+
+-- For a readable fraction (also used by the test mode preview).
+function UnitButton.ShowLowMana(frame, fraction)
+    frame.lowManaText:SetShown(fraction <= LOW_MANA_THRESHOLD)
+end
+
+local function UpdateLowMana(button)
+    local text, unit = button.lowManaText, button.unit
+    if not unit or not NeoHeal.db.layout.showLowMana or IsDeadOrOffline(unit) or not IsHealerButton(button) then
+        text:Hide()
+        return
+    end
+    if not (UnitPowerPercent and C_CurveUtil and C_CurveUtil.CreateColorCurve) then
+        UnitButton.ShowLowMana(button, GetPowerFraction(unit, MANA))
+        return
+    end
+
+    if not lowManaCurve then
+        local r, g, b = unpack(LOW_MANA_COLOR)
+        lowManaCurve = C_CurveUtil.CreateColorCurve()
+        lowManaCurve:SetType(Enum.LuaCurveType.Linear)
+        lowManaCurve:AddPoint(0, CreateColor(r, g, b, 1))
+        lowManaCurve:AddPoint(LOW_MANA_THRESHOLD, CreateColor(r, g, b, 1))
+        lowManaCurve:AddPoint(LOW_MANA_THRESHOLD + 0.001, CreateColor(r, g, b, 0))
+        lowManaCurve:AddPoint(1, CreateColor(r, g, b, 0))
+    end
+    -- Should this client refuse the secret colour, no text shows at all: a wrong
+    -- "OOM" on a healer with mana is worse than none.
+    local ok = pcall(function()
+        text:SetTextColor(UnitPowerPercent(unit, MANA, true, lowManaCurve):GetRGBA())
+    end)
+    text:SetShown(ok)
+end
+UnitButton.UpdateLowMana = UpdateLowMana   -- the tests use it
+
 local function UpdateHealth(button)
     local unit = button.unit
     local status
@@ -347,6 +422,7 @@ local function UpdateHealth(button)
         UpdateHealthText(button)
     end
     UpdateLowHealth(button, status ~= nil)
+    UpdateLowMana(button)   -- also for coming back from dead or offline
     UpdateIncomingHeals(button)
     UpdateHealPrediction(button)
     UpdateAbsorbs(button)
@@ -380,33 +456,18 @@ local PREDICTION_RANGE_COLOR = { 0.6, 1, 0.6, 0.3 }     -- the rest of its range
 local PREDICTION_ABSORB_COLOR = { 0.6, 0.8, 1, 0.6 }    -- a shield on your left click, the blue of its tooltip amount
 local ABSORB_COLOR = { 0.8, 0.9, 1, 0.6 }
 
--- "Resource bar: Healers only". Classic players rarely pick a role, so without
--- one the class decides.
-local HEALER_CLASSES = { PRIEST = true, DRUID = true, PALADIN = true, SHAMAN = true }
-
--- Whether a member with this role and class gets a resource bar (the preview uses it too).
+-- "Resource bar: Healers only". The healer rule itself is `UnitButton.IsHealer`,
+-- shared with the low-mana text.
 function UnitButton.ShowsPowerBar(role, class)
     local setting = NeoHeal.db.layout.powerBar
-    if setting == "healers" then
-        if role and role ~= "NONE" then return role == "HEALER" end
-        return HEALER_CLASSES[class] or false
-    end
+    if setting == "healers" then return UnitButton.IsHealer(role, class) end
     return setting ~= "none"
 end
 
 local function ShowsPowerBarForButton(button)
-    local unit = button.unit
-    local role = UnitGroupRolesAssigned and UnitGroupRolesAssigned(unit)
-    local class = IsTrue(UnitIsPlayer(unit)) and select(2, UnitClass(unit)) or nil   -- pets: no class
-    if IsSecret(role) then
-        -- Should the role be hidden in combat, keep the bar as it is (roles don't
-        -- change in combat) rather than fall back to the class: a shadow priest
-        -- would get a bar for the length of the fight.
-        if button.powerBarShown ~= nil then return button.powerBarShown end
-        role = nil
-    end
-    if IsSecret(class) then class = nil end
-    return UnitButton.ShowsPowerBar(role, class)
+    local setting = NeoHeal.db.layout.powerBar
+    if setting == "healers" then return IsHealerButton(button) end
+    return setting ~= "none"
 end
 
 -- Places the health bar above the resource bar, or over the full height without
@@ -463,6 +524,7 @@ UnitButton.ApplyStyle = ApplyStyle   -- the preview uses it too
 -- when a druid shifts into bear form.
 local function UpdatePower(button)
     local unit = button.unit
+    UpdateLowMana(button)   -- independent of the resource-bar setting
     LayoutBars(button, ShowsPowerBarForButton(button))
     if not button.powerBarShown then return end
 
@@ -972,6 +1034,15 @@ function UnitButton.CreateVisuals(frame)
     statusText:SetTextColor(unpack(HEALTH_TEXT_COLOR))
     frame.statusText = statusText
 
+    -- "OOM" over the middle of the health bar (UpdateLowMana). Its colour carries
+    -- the showing and hiding, as the mana behind it may be secret in combat.
+    local lowManaText = overlay:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    lowManaText:SetPoint("CENTER", health, "CENTER")
+    lowManaText:SetTextColor(unpack(LOW_MANA_COLOR))
+    lowManaText:SetText(L.LOW_MANA_TEXT)
+    lowManaText:Hide()
+    frame.lowManaText = lowManaText
+
     local raidIcon = overlay:CreateTexture(nil, "OVERLAY")
     raidIcon:SetSize(12, 12)
     raidIcon:Hide()   -- its texture is set per marker (UpdateRaidTarget), placed by LayoutTopIcons
@@ -1200,6 +1271,10 @@ local RELOADED_CONTAINERS = { "dispelContainer", "raidDebuffContainer", "hotCont
 function UnitButton:ReloadUnitButtons(unit)
     for button in pairs(self.buttons) do
         if button.unit == unit then
+            -- The token stays the same while the member behind it changes, so the
+            -- healer answer kept for a hidden role belonged to the previous one:
+            -- drop it, or a new target in combat inherits the old one's answer.
+            button.healerUnit = nil
             SetUnit(button, unit)
             for _, key in ipairs(RELOADED_CONTAINERS) do
                 local container = button[key]   -- nil without HoTs or cure spells

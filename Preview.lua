@@ -166,6 +166,18 @@ local function ShowFakeDispel(frame, show)
     end
 end
 
+-- Member 2 is a priest, so a healer: with 15% mana, to show the "OOM" text.
+local LOW_MANA_MEMBER = 2
+local FAKE_LOW_MANA = 0.15
+
+local function ShowFakeLowMana(frame, member)
+    if NeoHeal.db.layout.showLowMana and member == LOW_MANA_MEMBER then
+        NeoHeal.UnitButton.ShowLowMana(frame, FAKE_LOW_MANA)
+    else
+        frame.lowManaText:Hide()
+    end
+end
+
 -- The heal prediction of your left click shows on the frame under the mouse;
 -- here member 5 plays that frame. Every other frame gets empty, hidden bars.
 local PREDICTION_MEMBER = 5
@@ -191,13 +203,16 @@ local function Decorate(frame, member)
     SetHealthColor(frame, healthFraction, RAID_CLASS_COLORS[class])
     frame.health:SetValue(healthFraction)
     NeoHeal.UnitButton.ShowLowHealth(frame, healthFraction)
+    ShowFakeLowMana(frame, member)
     ShowFakePrediction(frame, NeoHeal.db.layout.showHealPrediction and member == PREDICTION_MEMBER)
     -- Every seventh member (the first tank among them) wears a shield.
     frame.absorb:SetValue(0.2)
     frame.absorb:SetShown(member % 7 == 1)
     NeoHeal.UnitButton.AnchorAmountBars(frame)
     frame.power:SetStatusBarColor(powerColor.r, powerColor.g, powerColor.b)
-    frame.power:SetValue(0.3 + ((member * 53) % 70) / 100)
+    -- The low-mana member's bar shows that same mana, so the "OOM" text and the bar
+    -- never disagree.
+    frame.power:SetValue(member == LOW_MANA_MEMBER and FAKE_LOW_MANA or 0.3 + ((member * 53) % 70) / 100)
     NeoHeal.UnitButton.ShowHealthText(frame, healthFraction, FAKE_MAX_HEALTH[class] or DEFAULT_FAKE_MAX_HEALTH)
     ShowFakeDebuffs(frame, ({ [4] = 1, [9] = 2 })[member % 11] or 0)   -- a few members carry boss debuffs
     NeoHeal.Hots.ShowPreview(frame, ({ [1] = 2, [2] = 1, [4] = 3 })[member % 5] or 0, member)
@@ -245,6 +260,7 @@ local function DecoratePet(frame, pet)
     SetHealthColor(frame, healthFraction, PET_COLOR)
     frame.health:SetValue(healthFraction)
     NeoHeal.UnitButton.ShowLowHealth(frame, healthFraction)
+    frame.lowManaText:Hide()   -- pets are never healers
     ShowFakePrediction(frame, false)
     frame.absorb:Hide()
     NeoHeal.UnitButton.AnchorAmountBars(frame)

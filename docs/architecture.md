@@ -95,10 +95,17 @@ Forever isn't checked in game.
 ### Updates
 
 `UpdateAll` calls one function per aspect: `ApplyStyle`, `UpdateIdentity`,
-`UpdateHealth` (which also updates the low-health tint, incoming heals, the
-heal prediction and absorbs), `UpdatePower`, `UpdateRange`, `UpdateAuras`,
-`UpdateAggro`, `UpdateRaidTarget`, `UpdateTargetHighlight`, `UpdateLeader`,
-`UpdateStatusIcon`.
+`UpdateHealth` (which also updates the low-health tint, the low-mana "OOM" text,
+incoming heals, the heal prediction and absorbs), `UpdatePower` (the resource
+bar, and the low-mana text again, as it follows the member's mana),
+`UpdateRange`, `UpdateAuras`, `UpdateAggro`, `UpdateRaidTarget`,
+`UpdateTargetHighlight`, `UpdateLeader`, `UpdateStatusIcon`.
+
+Who counts as a **healer** is one rule, `UnitButton.IsHealer(role, class)`, used
+by both the resource bar's "Healers only" and the low-mana text.
+`IsHealerButton` reads the role and class for a button, keeping what it knew when
+the game hides the role in combat; the low-mana text shows through a colour
+curve (`UpdateLowMana`), so secret mana is never tested.
 
 Unit events map to these functions in `EVENT_UPDATES` (UnitButton.lua).
 `UNIT_AURA` is **batched**: it marks the button, and all marked buttons are
@@ -118,7 +125,7 @@ buttons:
 | Event | Effect |
 | --- | --- |
 | `GROUP_ROSTER_UPDATE` | Update all buttons; out of combat: `Arrange`, or a full `Refresh` if party ↔ raid switched preset; re-hide Blizzard frames |
-| `PLAYER_ROLES_ASSIGNED` | Update all buttons (role icon, healer-only power bar) |
+| `PLAYER_ROLES_ASSIGNED` | Update all buttons (role icon, healer-only power bar, low-mana text) |
 | `UNIT_PET` | Re-arrange (pet column) |
 | `PLAYER_REGEN_DISABLED/ENABLED` | Missing buffs off/on; refresh auras (switch Lua icons ↔ containers); run queued work |
 | `PLAYER_TARGET_CHANGED`, `UNIT_TARGET` (target) | Target / targeted borders; `PLAYER_TARGET_CHANGED` also reloads the target frame (`ReloadUnitButtons("target")`) |

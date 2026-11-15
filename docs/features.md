@@ -88,11 +88,25 @@ the range answer in combat, and whether it accepts every unit for it.
 | Bottom right | Up to 3 of **your own** HoTs with a cooldown swipe and optional countdown |
 | Bottom right, 3rd slot | Out of combat: grey icon with red edge = this member lacks your class's raid buff, or has 10% or less of it left |
 | Centre, below the name | Up to 2 raid debuffs (e.g. boss debuffs), 1.5× the HoT icon size |
+| Centre, over the health bar | Blue "OOM" on a healer at 20% mana or less, in and out of combat |
 | Centre | Ready check answer, incoming resurrection, or incoming summon |
 | Left edge | Dispel strip in the debuff type's colour, only for types **you** can remove (Magic blue, Curse purple, Disease brown, Poison green) |
 | Top edge | Red line while the member has aggro |
 | Border | White: your current target (not on the target frame). Red: who your hostile target is targeting |
 | Whole frame | Fades to 40% when out of range |
+
+A **healer**, for the resource bar's "Healers only" and for the "OOM" text, is a
+member with the assigned Healer role, or one without a role whose class is
+Priest, Druid, Paladin or Shaman. The two use that one rule, so the text shows
+whatever the resource-bar setting says.
+
+The "OOM" text shows at 20% mana or less and never on a dead or offline member.
+It reads the mana bar, so a shapeshifted druid shows their own mana rather than
+the form's bar. In combat the mana behind it may be secret; a colour curve gives
+the text its alpha, so it shows and hides without the addon comparing anything.
+
+Not checked in game yet: whether the client accepts a secret colour on the text
+(hidden if not), and whether a shapeshifted druid's mana is readable at all.
 
 HoTs tracked per class: Priest Renew + Power Word: Shield, Druid Rejuvenation +
 Regrowth. Other classes show no HoT icons.
@@ -255,9 +269,9 @@ Left column:
 5 players edits Party and 10+ edits Raid.
 
 Right column (checkboxes): show when solo, raid debuffs, missing buffs, HoT
-timers, incoming heals, left-click heal prediction, aggro, tooltips, pets, target
-frame, focus frame (both off by default), hide Blizzard group frames (turning
-this off again needs a `/reload`).
+timers, incoming heals, left-click heal prediction, aggro, low mana, tooltips,
+pets, target frame, focus frame (both off by default), hide Blizzard group
+frames (turning this off again needs a `/reload`).
 
 Changes made in combat are applied when combat ends. The window shows a red
 notice while that is the case.

@@ -26,6 +26,7 @@ local DEFAULTS = {
         showIncomingHeals = true,
         showHealPrediction = true,   -- the frame under the mouse shows what your left click heals or shields
         showAggro = true,
+        showLowMana = true,        -- healers: "OOM" over the health bar at 20% mana or less
         showTooltips = true,
         showPets = false,
         showTargetFrame = false,   -- a frame for your target, above the group frames, while it is friendly
