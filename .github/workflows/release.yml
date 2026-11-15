@@ -1,0 +1,104 @@
+# Publishes a NeoHeal release to CurseForge when its version tag is pushed.
+#
+# Three starts, and only the first can upload anything:
+#   - a v* tag push: the release itself, when spec/release.lua says it may publish;
+#   - a pull request into main: builds the ZIP and stops before the upload, which is
+#     how the release path is proved without publishing;
+#   - a hand start: the same build-and-stop, for when a pull request cannot run it.
+# A run that does not publish always calls the packager with -d: the fail-safe default,
+# so a mistake in a ref check can lose an upload but never put a file in front of players.
+#
+# The stops before the upload live in spec/release.lua, which the suite runs too.
+# What is only shown by a real run: that GitHub starts this workflow for a tag, that
+# the token step's HTTP call succeeds, and that the packager's upload reaches
+# CurseForge. Everything up to the upload, including the ZIP's file list, is in the log.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+# The packager runs with CF_API_TOKEN in its environment, and nothing here writes to
+# the repository: read access is all the checkout needs.
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      # Full history and tags: the packager reads the version from the tag
+      # (`git describe`, `git tag --points-at`) and builds its changelog range from
+      # the previous one.
+      - name: Check out the repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+
+      # The runner image has no Lua interpreter, and lua5.4 is the distribution's.
+      - name: Install Lua
+        run: sudo apt-get update -qq && sudo apt-get install -yqq lua5.4
+
+      # S23: a release is only published from a commit whose tests pass.
+      - name: Run the tests
+        run: lua5.4 spec/run.lua
+
+      # The token and the game versions are checked here, not by the packager: with -d
+      # it makes no API call, so nothing else would notice a missing or revoked token.
+      # The packager treats a missing token as "nothing to upload" and exits 0, so a
+      # lost secret would otherwise be a green run that published nothing.
+      - name: Check the CurseForge token and the Forever game versions
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+        run: |
+          if [ -z "$CF_API_TOKEN" ]; then
+            echo "::error::CF_API_TOKEN is not set"
+            exit 1
+          fi
+          status=$(curl -sS -o versions.json -w "%{http_code}" \
+            -H "x-api-token: $CF_API_TOKEN" \
+            https://wow.curseforge.com/api/game/wow/versions)
+          if [ "$status" != "200" ]; then
+            echo "::error::token refused, HTTP $status"
+            exit 1
+          fi
+          # WoW: Forever is game version type 88568; the packager uploads under it too.
+          jq -r '.[] | select(.gameVersionTypeID == 88568) | .name' versions.json > forever-versions.txt
+          echo "Forever versions CurseForge lists:"
+          cat forever-versions.txt
+
+      # The stops: the tag against the toc's version, the notes, the project id and
+      # the game version. It writes the version's notes to .release/CHANGELOG.md for
+      # the packager's manual-changelog, and tells the next step whether to publish.
+      - name: Check the release
+        id: check
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+        run: |
+          mkdir -p .release
+          lua5.4 spec/release.lua \
+            --ref "$GITHUB_REF" \
+            --versions forever-versions.txt \
+            --out .release/CHANGELOG.md
+
+      # The packager builds the ZIP and, without -d, uploads it to the project named
+      # in NeoHeal.toc's X-Curse-Project-ID. No GitHub, WoWInterface or Wago token is
+      # set on purpose: those uploads are not part of this workflow.
+      - name: Build the release, and publish it only on a release tag
+        uses: BigWigsMods/packager@01e8631a69c69d7654c788d152630d5fed9e3812 # v2
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+        with:
+          args: >-
+            -n "{package-name}-{project-version}:{package-name}-{project-version}"
+            ${{ steps.check.outputs.publish == 'true' && '' || '-d' }}
+
+      # The packager never prints what it zipped. This list is the proof of the ZIP's
+      # contents (S7 to S10), for every run.
+      - name: List the ZIP's contents
+        run: unzip -l .release/*.zip

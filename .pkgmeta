@@ -1,0 +1,23 @@
+# The BigWigs packager's config (release.sh, run by .github/workflows/release.yml).
+# It never reads .gitattributes, so this file needs its own ship list: the entries
+# below leave out what players do not need from the release ZIP. The same entries
+# are .gitattributes' export-ignore lines, for the hand route in docs/curseforge.md;
+# spec/release_test.lua fails when the two lists differ.
+ignore:
+  - docs
+  - spec
+  - CLAUDE.md
+  - .claude
+  - .github
+  - .gitattributes
+  - .gitignore
+  - .pkgmeta
+
+# The changelog CurseForge shows per file: the section for the tagged version out of
+# docs/curseforge.md, which the workflow writes to .release/CHANGELOG.md before the
+# packager runs. markup-type is what makes CurseForge render it as Markdown; without
+# it the upload is sent as plain text. A test holds this path to the one the code
+# writes, because a mismatch makes the packager fall back to a changelog of commits.
+manual-changelog:
+  filename: .release/CHANGELOG.md
+  markup-type: markdown

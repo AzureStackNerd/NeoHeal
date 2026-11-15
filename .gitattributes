@@ -1,8 +1,12 @@
 # Left out of the release ZIP (git archive, see docs/curseforge.md): players
-# only need the .toc, the .lua files, Locales/ and LICENSE.
+# only need the .toc, the .lua files, Locales/ and LICENSE. The automatic release
+# does not read this file at all: its list is .pkgmeta's ignore:, and
+# spec/release_test.lua fails when the two differ. Add an entry to both.
 /docs export-ignore
 /spec export-ignore
 /CLAUDE.md export-ignore
 /.claude export-ignore
+/.github export-ignore
 /.gitignore export-ignore
 /.gitattributes export-ignore
+/.pkgmeta export-ignore

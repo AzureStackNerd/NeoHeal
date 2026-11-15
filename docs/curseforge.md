@@ -21,7 +21,7 @@ Requirements as found on 2026-10-04:
 
 | Field | Value |
 | --- | --- |
-| Game | World of Warcraft (shown as "World of Warcraft Midnight" in the Author Console, the only WoW entry). Forever isn't a separate game: it's chosen per file, see [Uploading a file](#uploading-a-file). |
+| Game | World of Warcraft (shown as "World of Warcraft Midnight" in the Author Console, the only WoW entry). Forever isn't a separate game: it's chosen per file, see [The file and its changelog](#the-file-and-its-changelog). |
 | Name | NeoHeal |
 | Summary | See [Summary](#summary) |
 | Description | See [Description](#description). Switch the editor to Markdown first: it starts in WYSIWYG, where `##` and `-` show as plain text. |
@@ -73,15 +73,40 @@ Made for WoW: Forever (Interface 16001). The heal amounts are read from the spel
 
 NOTE: Inspired by HealBot which I loved to use for a long time
 
-## Uploading a file
+## Publishing a release
+
+A release publishes itself: push its version tag and the GitHub workflow
+`.github/workflows/release.yml` builds the ZIP and uploads it. Do this, in order:
+
+1. Write the version's notes below, under a heading `### <version>`, exactly in that
+   form (`### 0.7.0`). The workflow copies that section, and nothing else, to
+   CurseForge; a missing or empty section stops the release.
+2. Set `## Version:` in `NeoHeal.toc` to the same version. A tag that names another
+   version stops the release, naming both.
+3. Commit and push to `main`.
+4. Tag and push the tag: `git tag v<version>` then `git push origin v<version>`. Only
+   `vX.Y.Z` publishes (so `v0.7.0`, not `v0.7` or `v0.7.0-beta1`); another `v*` tag
+   builds nothing and says so in its run.
+5. Watch the run under Actions. Its log shows the Forever version and the ZIP's
+   contents, and the file appears on the project's files page.
+
+A wrong version, a version without notes, a missing or refused token, and an Interface
+that CurseForge has no Forever version for all stop the run before anything is
+uploaded, and its log names the reason. Fix the cause and run the workflow again for
+the same tag, from the Actions page. Do not re-run a run that already published: it is
+green, and a second run puts a second file for that version in the players' list.
+
+A pull request into `main` and a run started by hand both build the ZIP and stop before
+the upload, so the way a release is built can be checked without publishing anything.
+
+### The file and its changelog
 
 | Field | Value |
 | --- | --- |
-| File | `NeoHeal-<version>.zip` (see [Building the ZIP](#building-the-zip)) |
+| File | `NeoHeal-v<version>.zip`, built by the BigWigs packager from the tagged commit |
 | Release type | Release |
-| Game version | Only Forever (1.60.1); no Retail or Classic. This tag decides which installs the CurseForge app offers the file to. CurseForge doesn't check it against the `.toc` (`## Interface: 16001`), so keep the two in line. |
-
-The changelog per file, in Markdown like the description.
+| Game version | Only Forever (1.60.1); no Retail or Classic. The workflow reads the Interface from `NeoHeal.toc` (`## Interface: 16001`) and stops when CurseForge has no Forever version for it, so keep the two in line. |
+| Changelog | The `### <version>` section of this file, sent as Markdown |
 
 ### 0.6.0
 
@@ -112,19 +137,24 @@ First release on CurseForge.
 - A tooltip that lists your bindings and how much each heal or shield heals or absorbs.
 - Party and raid frames with size presets, HoT timers, debuffs, a dispel strip, missing raid buffs, role icons and test mode.
 
-## Building the ZIP
+## Building the ZIP by hand
+
+The fallback route, for a test build to install in game before a release has notes and
+a version tag (the in-game checks of a fix, say). The workflow above needs neither of
+you; for a normal release, do not use this route.
 
 The ZIP must hold one folder, `NeoHeal/`, with the `.toc`, the `.lua` files,
-`Locales/` and `LICENSE`. `.gitattributes` keeps `docs/`, `spec/`, `CLAUDE.md`
-and the git files out, but only for what is committed: `git archive` reads the
-tagged commit. So commit everything first, then tag, then build the ZIP outside
-the AddOns folder:
+`Locales/` and `LICENSE`. `.gitattributes` keeps `docs/`, `spec/`, `CLAUDE.md`, `.github`,
+`.pkgmeta` and the git files out, but only for what is committed: `git archive` reads
+the tagged commit, and it does not build from a working tree. So commit everything
+first, then build the ZIP outside the AddOns folder:
 
 ```sh
 git commit ...                      # the version in NeoHeal.toc and everything else
-git tag v<version>
-git archive --format=zip --prefix=NeoHeal/ -o "<outside the repo>/NeoHeal-<version>.zip" v<version>
+git archive --format=zip --prefix=NeoHeal/ -o "<outside the repo>/NeoHeal-<version>.zip" HEAD
 ```
 
-Before uploading, list the ZIP's contents and check the version in its
-`NeoHeal.toc`.
+`.pkgmeta` holds the same list for the automatic route, because the packager never
+reads `.gitattributes`; `lua spec/run.lua` fails when the two lists differ, so add an
+entry to both. Before installing a hand-built ZIP, list its contents and check the
+version in its `NeoHeal.toc`.

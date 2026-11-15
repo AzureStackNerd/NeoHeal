@@ -7,6 +7,7 @@
 ## AddonCompartmentFunc: NeoHeal_OnAddonCompartmentClick
 ## SavedVariables: NeoHealDB
 ## SavedVariablesPerCharacter: NeoHealCharDB
+## X-Curse-Project-ID: 1726356
 
 Locales\enUS.lua
 
