@@ -55,7 +55,7 @@ complicated as Healbot").
   "briefRules": [
     "Read the repository's CLAUDE.md first: its hard rules (combat lockdown, secret values, auras in combat, click types, event guards, new settings) bind every change.",
     "The tests run against a fake WoW API (spec/support.lua) under Lua 5.4; the game runs Lua 5.1. A test proves NeoHeal's logic, never that Forever's client accepts a call: say what is not checked in game.",
-    "A Forever API call or behaviour nobody can check here (there is no game client in these sessions) is worded as not checked in game in the code and docs, and listed in the gate file's Not done; the product owner adds it to an open issue labelled 'in-game check' for the release it ships in, or files one.",
+    "A Forever API call or behaviour nobody can check here (there is no game client in these sessions) is worded as not checked in game in the code and docs, and listed in the gate file's Not done; the product owner adds it to an open issue labelled 'in-game check' for the release it ships in, or files one. Each check states what Remco does and what he should see, as a checkbox; the issues are split by the situation a check needs (solo, in or out of combat; in a party or raid), one issue per situation per release, so the solo checks don't wait for a group (Remco, 2026-11-15).",
     "A new spec file is added to the list in spec/run.lua, or it never runs.",
     "The addon's .lua files are CRLF: keep each file's line endings as they are.",
     "Mutations run in a copy of the addon files, Locales/ and spec/ under the scratch path, restored by copying the saved file back, never in the repository and never with git.",
