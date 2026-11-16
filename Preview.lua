@@ -178,6 +178,16 @@ local function ShowFakeLowMana(frame, member)
     end
 end
 
+-- The five-second bar on the healer whose frame also shows the "OOM" text: part
+-- drained, and still (test mode times no cast). Only the frames that show you carry
+-- it for real, and here only this member stands for you.
+local FAKE_FIVE_SECOND = 0.6
+
+local function ShowFakeFiveSecond(frame, show)
+    frame.fiveSecond:SetValue(FAKE_FIVE_SECOND)
+    frame.fiveSecond:SetShown(show and NeoHeal.db.layout.showFiveSecond == true)
+end
+
 -- The heal prediction of your left click shows on the frame under the mouse;
 -- here member 5 plays that frame. Every other frame gets empty, hidden bars.
 local PREDICTION_MEMBER = 5
@@ -204,6 +214,7 @@ local function Decorate(frame, member)
     frame.health:SetValue(healthFraction)
     NeoHeal.UnitButton.ShowLowHealth(frame, healthFraction)
     ShowFakeLowMana(frame, member)
+    ShowFakeFiveSecond(frame, member == LOW_MANA_MEMBER)
     ShowFakePrediction(frame, NeoHeal.db.layout.showHealPrediction and member == PREDICTION_MEMBER)
     -- Every seventh member (the first tank among them) wears a shield.
     frame.absorb:SetValue(0.2)
@@ -261,6 +272,7 @@ local function DecoratePet(frame, pet)
     frame.health:SetValue(healthFraction)
     NeoHeal.UnitButton.ShowLowHealth(frame, healthFraction)
     frame.lowManaText:Hide()   -- pets are never healers
+    frame.fiveSecond:Hide()    -- and never show you, so never show the bar
     ShowFakePrediction(frame, false)
     frame.absorb:Hide()
     NeoHeal.UnitButton.AnchorAmountBars(frame)

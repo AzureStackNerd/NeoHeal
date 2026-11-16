@@ -84,7 +84,7 @@ the range answer in combat, and whether it accepts every unit for it.
 | Health bar | Class colour (pets green), or green → yellow → red by health |
 | After the health fill | Incoming heals (light green), then the heal prediction of your left click (lighter green, or blue for a shield; frame under the mouse only), then shields/absorbs (pale blue) |
 | Empty part of health bar | Turns red below 35% health |
-| Bottom strip | Resource bar (mana/rage/energy) for everyone, healers only, or nobody |
+| Bottom strip | Resource bar (mana/rage/energy) for everyone, healers only, or nobody. On your own frame(s) also the five-second bar, above it, while mana regeneration is off |
 | Top left | Name, cut off at the icons (no "...") |
 | Top right | Raid marker, role icon (main tank / main assist / tank / healer), leader crown or assist flag |
 | Bottom left | Health text: percentage, health missing (`-2340`), or off. "Dead" / "Offline" |
@@ -110,6 +110,26 @@ the text its alpha, so it shows and hides without the addon comparing anything.
 
 Not checked in game yet: whether the client accepts a secret colour on the text
 (hidden if not), and whether a shapeshifted druid's mana is readable at all.
+
+**The five-second rule** ("Show five-second rule", on by default): a spell that costs
+mana stops your mana regeneration for 5 seconds. While it is off, a thin pale bar
+sits on the top of the mana strip of every frame that shows you — your own frame and,
+while it shows you, the target or focus frame — full at the cast and draining to
+empty over those 5 seconds. No bar means regeneration is back. A new spell that costs
+mana fills it again. It drains from the end of a cast and from the start of a
+channel; a channel longer than 5 seconds leaves the bar empty while the channel may
+still run (a known limit, by community sources and not checked in game).
+
+It shows only where there is a mana strip: with Resource bar off, or "Healers only"
+while you are no healer, there is no bar either. A warrior or a rogue never sees it;
+a druid sees none while in Cat or Bear Form, and the time left again on the mana
+strip when back in caster form within the 5 seconds. Only your own casts start it,
+and other members' frames never show it.
+
+An action that costs no mana starts no bar and leaves a running one alone; so does a
+cast that fails or is interrupted. What Forever tells the addon about your casts and
+their mana cost is not checked in game, and the 5-second rule itself comes from
+community sources, also not checked in game.
 
 HoTs tracked per class: Priest Renew + Power Word: Shield, Druid Rejuvenation +
 Regrowth. Other classes show no HoT icons.
@@ -290,9 +310,10 @@ Left column:
 5 players edits Party and 10+ edits Raid.
 
 Right column (checkboxes): show when solo, raid debuffs, missing buffs, HoT
-timers, incoming heals, left-click heal prediction, aggro, low mana, tooltips,
-pets, target frame, focus frame (both off by default), hide Blizzard group
-frames (turning this off again needs a `/reload`).
+timers, incoming heals, left-click heal prediction, aggro, low mana, five-second
+rule, tooltips, pets, target frame, focus frame (both off by default), hide
+Blizzard group frames (turning this off again needs a `/reload`).
 
 Changes made in combat are applied when combat ends. The window shows a red
-notice while that is the case.
+notice while that is the case. One exception: turning the five-second rule off
+takes its bar away at once, also in combat.

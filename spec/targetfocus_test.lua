@@ -683,3 +683,63 @@ function TestTargetFocusRange:testTheAppliedBindingsCount()
     self.ns.ClickCast.appliedBindings = { ["1"] = { action = "spell", spellID = 552, target = "unit" } }
     lu.assertEquals(self.ns.ClickCast:GetLeftClickSpell(), 552, "not the spell of the bindings applied to the frames")
 end
+
+---------------------------------------------------------------------------
+-- The five-second bar (spec/fivesecond_test.lua has the rest): the target and
+-- focus frames carry it while they show you, and follow a switch at once.
+---------------------------------------------------------------------------
+TestTargetFocusFiveSecond = {}
+
+function TestTargetFocusFiveSecond:tearDown() Restore() end
+
+-- self.targetIsYou / self.focusIsYou say whom the frames show.
+function TestTargetFocusFiveSecond:setUp()
+    local ns = Support.LoadUnitButtons(Override)
+    self.targetIsYou, self.focusIsYou = true, true
+    Override("UnitIsUnit", function(a, b)
+        if b ~= "player" then return a == b end
+        return a == "player" or (a == "target" and self.targetIsYou) or (a == "focus" and self.focusIsYou)
+    end)
+    Support.SetPowerCost(Support.FLASH_HEAL[1], Support.ManaCost())
+    Support.SetTime(1000)
+    self.ns, self.UnitButton = ns, ns.UnitButton
+    self.own = Support.RealButton(ns, "player")
+    self.target = Support.RealButton(ns, "target")
+    self.focus = Support.RealButton(ns, "focus")
+end
+
+local function FiveSecondBar(button)
+    local bar = button.fiveSecond
+    if not bar.shown or bar.alpha == 0 then return nil end
+    return bar.value
+end
+
+-- AC3, S19, S20: the target and focus frames on you show the bar with the same
+-- time left as your own frame, at the same moment.
+function TestTargetFocusFiveSecond:testTheTargetFrameOnYouShowsTheBar()
+    self.UnitButton.OnPlayerCast("player", "Cast-1", Support.FLASH_HEAL[1])
+    Support.SetTime(1002)
+    self.UnitButton.UpdateFiveSecond()
+    lu.assertAlmostEquals(FiveSecondBar(self.own), 0.6, 1e-9, "your own frame")
+    lu.assertAlmostEquals(FiveSecondBar(self.target) or -1, 0.6, 1e-9, "the target frame on you")
+    lu.assertAlmostEquals(FiveSecondBar(self.focus) or -1, 0.6, 1e-9, "the focus frame on you")
+end
+
+-- AC6, S21, S31: a new target or focus during a countdown: someone else, no bar
+-- from that moment; you again, the bar with the time left. No tick in between.
+function TestTargetFocusFiveSecond:testTheBarFollowsTheTargetToAndFromYou()
+    self.targetIsYou, self.focusIsYou = false, false
+    self.UnitButton:ReloadUnitButtons("target")
+    self.UnitButton:ReloadUnitButtons("focus")
+    self.UnitButton.OnPlayerCast("player", "Cast-1", Support.FLASH_HEAL[1])
+    lu.assertNil(FiveSecondBar(self.target), "the target frame on someone else shows the bar")
+    Support.SetTime(1001)
+    self.targetIsYou, self.focusIsYou = true, true
+    self.UnitButton:ReloadUnitButtons("target")
+    self.UnitButton:ReloadUnitButtons("focus")
+    lu.assertAlmostEquals(FiveSecondBar(self.target) or -1, 0.8, 1e-9, "the target frame now on you")
+    lu.assertAlmostEquals(FiveSecondBar(self.focus) or -1, 0.8, 1e-9, "the focus frame now on you")
+    self.targetIsYou = false
+    self.UnitButton:ReloadUnitButtons("target")
+    lu.assertNil(FiveSecondBar(self.target), "the target frame keeps the bar after switching away from you")
+end

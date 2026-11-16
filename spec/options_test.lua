@@ -549,3 +549,65 @@ function TestOptionsTitle:testAClientWithoutAddOnsKeepsThePlainTitle()
     local title, L = BuildWindowTitle(nil)
     lu.assertEquals(title, L.OPTIONS_TITLE)
 end
+
+---------------------------------------------------------------------------
+-- The five-second rule's option on the Layout page (spec/fivesecond_test.lua has
+-- what it does).
+---------------------------------------------------------------------------
+TestFiveSecondOption = {}
+
+local FIVE_SECOND_GLOBALS = { "CreateFrame", "UIParent", "UISpecialFrames", "Round", "MinimalSliderWithSteppersMixin",
+                              "CreateMinimalSliderFormatter" }
+
+function TestFiveSecondOption:setUp()
+    self.saved = {}
+    for _, name in ipairs(FIVE_SECOND_GLOBALS) do self.saved[name] = { _G[name] } end
+end
+
+function TestFiveSecondOption:tearDown()
+    for name, old in pairs(self.saved) do _G[name] = old[1] end
+end
+
+-- AC5, S26: a checkbox on the Layout page, labelled with the string, switches
+-- showFiveSecond.
+function TestFiveSecondOption:testTheFiveSecondOptionIsOnTheLayoutPage()
+    local ns = Support.Load({ "Locales/enUS.lua", "Spells.lua", "ClickCast.lua", "Options.lua" })
+    local texts = {}
+    local function OptionsFrame(owner)
+        local frame = { scripts = {}, owner = owner }
+        return setmetatable(frame, { __index = function(_, key)
+            if key == "SetScript" then return function(self, name, func) self.scripts[name] = func end end
+            if key == "SetText" then
+                return function(self, text)
+                    self.text = text
+                    table.insert(texts, self)
+                end
+            end
+            if type(key) == "string" and key:match("^%u") and key ~= "TitleText" then
+                return function(self) return OptionsFrame(self) end
+            end
+        end })
+    end
+    CreateFrame = function(_, _, parent) return OptionsFrame(parent) end
+    UIParent, UISpecialFrames = OptionsFrame(), {}
+    Round = function(value) return math.floor(value + 0.5) end
+    MinimalSliderWithSteppersMixin = { Label = { Right = 1 }, Event = { OnValueChanged = 1 } }
+    CreateMinimalSliderFormatter = function() end
+    ns.Layout = { GetSize = function() return {} end, Refresh = function() end }
+    ns.RunOutOfCombat = function(_, _, func) func() end
+    ns.ClickCast.QueueApply = function() end
+    ns.charDB = { bindings = {}, hoverKeys = {} }
+    ns.db = { layout = { showFiveSecond = true } }
+    ns.Spells:Scan()
+    ns.Options:Create()
+    -- A missing string would show its own key (Locales/enUS.lua), so look in the table itself.
+    lu.assertNotNil(rawget(ns.L, "SHOW_FIVE_SECOND"), "no string for the option: the checkbox shows its key")
+    local checkbox
+    for _, frame in ipairs(texts) do
+        if frame.text == ns.L.SHOW_FIVE_SECOND then checkbox = frame.owner end
+    end
+    lu.assertNotNil(checkbox, "no five-second checkbox on the Layout page")
+    rawset(checkbox, "GetChecked", function() return false end)
+    checkbox.scripts.OnClick(checkbox)
+    lu.assertEquals(ns.db.layout.showFiveSecond, false, "the checkbox doesn't switch showFiveSecond")
+end

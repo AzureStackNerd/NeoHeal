@@ -29,6 +29,7 @@ reaches existing installs automatically.
 | `showHealPrediction` | `true` | the frame under the mouse shows what your left click heals or shields |
 | `showAggro` | `true` | |
 | `showLowMana` | `true` | healers: "OOM" over the health bar at 20% mana or less |
+| `showFiveSecond` | `true` | the five-second bar on the mana strip of every frame that shows you |
 | `showTooltips` | `true` | |
 | `showPets` | `false` | |
 | `showTargetFrame` | `false` | a frame for your target above the group frames, while it is friendly |

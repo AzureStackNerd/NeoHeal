@@ -99,7 +99,20 @@ Forever isn't checked in game.
 incoming heals, the heal prediction and absorbs), `UpdatePower` (the resource
 bar, and the low-mana text again, as it follows the member's mana),
 `UpdateRange`, `UpdateAuras`, `UpdateAggro`, `UpdateRaidTarget`,
-`UpdateTargetHighlight`, `UpdateLeader`, `UpdateStatusIcon`.
+`UpdateTargetHighlight`, `UpdateLeader`, `UpdateStatusIcon`, `UpdateFiveSecondFor`
+(that frame's five-second bar only).
+
+The **five-second rule** is the one update that is not per member: `castAt` in
+UnitButton.lua holds the moment your last spell that spent mana went off, and a
+0.1 s ticker (`UnitButton.UpdateFiveSecond`) draws every frame's bar from it, so a
+frame that starts or stops showing you needs nothing carried over. `Core.lua` gives
+`UNIT_SPELLCAST_SUCCEEDED` and `UNIT_SPELLCAST_CHANNEL_START` (registered for the
+"player" unit) to `UnitButton.OnPlayerCast`, which asks
+`C_Spell.GetSpellPowerCost` whether the spell spends mana. The value is read from
+`GetTime()` on every update, never stepped down, so a jump in time (a loading
+screen, a return to caster form) shows the right time left at once. What Forever
+tells an addon about your casts and their cost is not checked in game
+([features.md](features.md), "What one frame shows").
 
 Who counts as a **healer** is one rule, `UnitButton.IsHealer(role, class)`, used
 by both the resource bar's "Healers only" and the low-mana text.

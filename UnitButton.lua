@@ -18,6 +18,10 @@ local WHITE_TEXTURE = "Interface\\Buttons\\WHITE8X8"
 local PET_BAR_COLOR = { r = 0.2, g = 0.8, b = 0.2 }
 local FALLBACK_POWER_COLOR = { r = 0.0, g = 0.5, b = 1.0 }   -- mana blue
 local POWER_BAR_HEIGHT = 4
+local FIVE_SECOND_SECONDS = 5    -- how long your mana regeneration stays off after a cast
+local FIVE_SECOND_TICK = 0.1     -- seconds; how often the five-second bar moves
+local FIVE_SECOND_HEIGHT = 2     -- pixels on the strip's top edge, so the mana below stays visible
+local FIVE_SECOND_COLOR = { 0.55, 0.85, 1, 0.9 }   -- pale blue, brighter than the mana under it
 local AGGRO_THREAT_STATUS = 2    -- UnitThreatSituation: 2 and 3 mean "has aggro"
 local AURA_BATCH_DELAY = 0.1     -- seconds; UNIT_AURA bursts on one unit cost one scan
 
@@ -541,7 +545,8 @@ local function ApplyStyle(button)
 
     local health, power, incoming, absorb, inset = button.health, button.power, button.incoming, button.absorb, style.inset
     local prediction, predictionRange, predictionAbsorb = button.prediction, button.predictionRange, button.predictionAbsorb
-    for _, bar in ipairs({ health, power, incoming, prediction, predictionRange, predictionAbsorb, absorb }) do
+    local fiveSecond = button.fiveSecond
+    for _, bar in ipairs({ health, power, incoming, prediction, predictionRange, predictionAbsorb, absorb, fiveSecond }) do
         bar:SetStatusBarTexture(style.barTexture)
     end
     incoming:SetStatusBarColor(unpack(INCOMING_HEAL_COLOR))
@@ -549,6 +554,7 @@ local function ApplyStyle(button)
     predictionRange:SetStatusBarColor(unpack(PREDICTION_RANGE_COLOR))
     predictionAbsorb:SetStatusBarColor(unpack(PREDICTION_ABSORB_COLOR))
     absorb:SetStatusBarColor(unpack(ABSORB_COLOR))
+    fiveSecond:SetStatusBarColor(unpack(FIVE_SECOND_COLOR))
     AnchorAmountBars(button)   -- to the fills of the new textures
 
     power:SetPoint("BOTTOMLEFT", inset, inset)
@@ -805,6 +811,147 @@ local function UpdateTargetHighlight(button)
     end
 end
 
+---------------------------------------------------------------------------
+-- The five-second rule: mana regeneration stays off for 5 seconds after a spell
+-- that costs mana, so your frame(s) show a thin bar on the mana strip that drains
+-- over those 5 seconds and is gone when regeneration is back.
+--
+-- One countdown for the whole addon, not one per frame: every frame that shows you
+-- draws the same time left, so a frame that starts or stops showing you (a target
+-- switch, a roster change) needs nothing dropped. The value is read from the clock
+-- on every update, never stepped down per tick, so a jump in time (a loading screen,
+-- a return to caster form) shows the right time left at once.
+---------------------------------------------------------------------------
+local castAt         -- GetTime of the last spell that spent mana; nil while no countdown runs
+local lastCastGUID   -- that cast's GUID, kept only while the game gives it readable
+
+-- Enum.PowerType.Mana: your strip must show mana, so a warrior or a rogue and a
+-- druid in a form fall out by themselves. Your own power type is read, never the
+-- frame's: every frame the bar may show on is you (ShowIfSameUnit decides), and on a
+-- map that restricts addons a raid frame's power type can be hidden where yours is
+-- not, which would keep the bar off your own raid frame (S18, S38). A hidden power
+-- type shows no bar: a bar that may say the wrong thing is worse.
+local function ShowsManaStrip()
+    local powerType = UnitPowerType("player")
+    if IsSecret(powerType) then return false end
+    return powerType == MANA
+end
+
+-- The fraction of the 5 seconds still to run, or nil when no bar should show:
+-- no countdown, the option off, you are dead, or the 5 seconds are over.
+local function FiveSecondLeft()
+    if not NeoHeal.db or not NeoHeal.db.layout.showFiveSecond then return nil end
+    if castAt == nil or IsTrue(UnitIsDeadOrGhost("player")) then return nil end
+    local left = (castAt + FIVE_SECOND_SECONDS - GetTime()) / FIVE_SECOND_SECONDS
+    if left <= 0 then return nil end
+    return left
+end
+
+-- One frame's bar, from the shared countdown. Also called from UpdateAll, so a
+-- target switching away from you or a roster change is right at once.
+local function UpdateFiveSecondFor(button)
+    local bar = button.fiveSecond
+    if not bar then return end
+    local left = FiveSecondLeft()
+    if left == nil or not button.unit or not ShowsManaStrip() then
+        bar:Hide()
+        return
+    end
+    bar:SetValue(left)
+    -- Your own frame is "player"; every other frame is compared with the game, whose
+    -- answer it may hide on maps where it restricts addons. A hidden answer goes to
+    -- SetAlphaFromBoolean, and a client without that method keeps the bar hidden --
+    -- never a bar on a frame that is not you. Not checked in game.
+    ShowIfSameUnit(bar, button.unit, "player")
+end
+UnitButton.UpdateFiveSecondFor = UpdateFiveSecondFor   -- the tests use it
+
+-- Ends the countdown for good: every bar hidden once, then nothing runs until the
+-- next spell. Five seconds passing, the option turned off and your death all end it
+-- this way, which is what makes "off, then on again" (S27) and a resurrection (S32)
+-- wait for the next spell instead of showing the seconds that were left.
+local function EndCountdown()
+    castAt = nil
+    lastCastGUID = nil
+    for button in pairs(UnitButton.buttons) do
+        if button.fiveSecond then button.fiveSecond:Hide() end
+    end
+end
+
+-- The tick: one update of every bar. It returns at once while no countdown runs, so
+-- it costs nothing between casts.
+function UnitButton.UpdateFiveSecond()
+    if castAt == nil then return end
+    if FiveSecondLeft() == nil then
+        EndCountdown()
+        return
+    end
+    for button in pairs(UnitButton.buttons) do
+        UpdateFiveSecondFor(button)
+    end
+end
+
+-- One cost entry of C_Spell.GetSpellPowerCost: does it need mana that you have? The
+-- required aura is what the client says the cost applies under (a form, a spec); an
+-- ability that lists a mana cost for another form must not start the bar (S13).
+-- A field NeoHeal can't read, or one the client leaves out, counts as mana.
+local function EntryCostsMana(cost)
+    local kind = cost.type
+    if IsSecret(kind) then return true end
+    if kind ~= MANA then return false end
+    local requiredAura = cost.requiredAuraID
+    if requiredAura == nil or IsSecret(requiredAura) or requiredAura == 0 then return true end
+    local hasAura = cost.hasRequiredAura
+    if IsSecret(hasAura) then return true end
+    return IsTrue(hasAura)
+end
+
+-- Whether a spell's cost says it spends mana. A spell the game says has no resource
+-- cost starts no bar (a wand's Shoot, a melee swing, Life Tap: S6); only a cost
+-- NeoHeal cannot read -- a missing function, a hidden value, an error -- counts as
+-- mana, as nearly every spell a mana user casts costs some and a bar that may be
+-- wrong that way is the safe one (S8, open point 5).
+local function CostsMana(spellID)
+    if IsSecret(spellID) then return true end
+    if not C_Spell or not C_Spell.GetSpellPowerCost then return true end
+    -- The whole read is in the pcall: the client can refuse the call or hand back a
+    -- table whose insides can't be read, and either is a cost NeoHeal could not read.
+    local ok, spends = pcall(function()
+        local costs = C_Spell.GetSpellPowerCost(spellID)
+        if IsSecret(costs) then return true end
+        if not costs then return false end   -- the docs: nil when the spell has no resource cost
+        for _, cost in ipairs(costs) do
+            if EntryCostsMana(cost) then return true end
+        end
+        return false
+    end)
+    if not ok then return true end
+    return spends
+end
+
+-- A spell of yours went off, or a channel of yours started (Core.lua's events).
+-- Both events can carry hidden values: the client marks them SecretWhenUnitSpellCast
+-- Restricted, so a castGUID is compared only while it is readable, and a hidden
+-- spellID starts the bar without asking for its cost. That Forever fires these events
+-- for your own casts, also in combat, is not checked in game.
+function UnitButton.OnPlayerCast(unit, castGUID, spellID)
+    if not NeoHeal.db or not NeoHeal.db.layout.showFiveSecond then return end
+    -- Both events are registered for "player", so a cast that arrives is yours; the
+    -- unit is checked because the client's docs mark the payload secret, and a hidden
+    -- one is no proof that this is someone else's (compared with a constant it is
+    -- simply unequal, which would drop your own cast).
+    if not IsSecret(unit) and unit ~= "player" then return end
+    if not IsSecret(castGUID) then
+        if castGUID == lastCastGUID then return end   -- a channel's own end does not restart the bar
+        lastCastGUID = castGUID
+    else
+        lastCastGUID = nil
+    end
+    if not CostsMana(spellID) then return end
+    castAt = GetTime()
+    UnitButton.UpdateFiveSecond()
+end
+
 -- The top line: the name on the left, always at the same spot so names line up
 -- down a column, and the status icons on the right. From the right: raid target
 -- marker, role icon, then a crown for the group leader or a flag for raid
@@ -925,6 +1072,7 @@ local function UpdateAll(button)
     UpdateTargetHighlight(button)
     UpdateLeader(button)
     UpdateStatusIcon(button)
+    UpdateFiveSecondFor(button)   -- a new unit on this button reads its strip and whether it is you
 end
 
 ---------------------------------------------------------------------------
@@ -1011,6 +1159,17 @@ function UnitButton.CreateVisuals(frame)
     power:SetHeight(POWER_BAR_HEIGHT)
     power:SetMinMaxValues(0, 1)
     frame.power = power
+
+    -- The five-second bar (UpdateFiveSecond): a child of the strip, so hiding the
+    -- strip hides it too, and 2 pixels on its top edge leave the mana below visible.
+    -- It takes its texture and colour from ApplyStyle, like every other bar.
+    local fiveSecond = CreateFrame("StatusBar", nil, power)
+    fiveSecond:SetHeight(FIVE_SECOND_HEIGHT)
+    fiveSecond:SetPoint("TOPLEFT", power, "TOPLEFT", 0, 0)
+    fiveSecond:SetPoint("TOPRIGHT", power, "TOPRIGHT", 0, 0)
+    fiveSecond:SetMinMaxValues(0, 1)
+    fiveSecond:Hide()
+    frame.fiveSecond = fiveSecond
 
     local health = CreateFrame("StatusBar", nil, content)
     health:SetMinMaxValues(0, 1)
@@ -1349,6 +1508,11 @@ function UnitButton:UpdateStatusIcons()
         end
     end
 end
+
+-- The five-second bar's clock. It returns at once while no countdown runs, so it
+-- costs nothing between casts. Whether a ticker keeps running in combat is not
+-- checked in game; the bar is a plain frame's, so nothing here touches a secure one.
+C_Timer.NewTicker(FIVE_SECOND_TICK, UnitButton.UpdateFiveSecond)
 
 C_Timer.NewTicker(RANGE_CHECK_INTERVAL, function()
     for button in pairs(UnitButton.buttons) do

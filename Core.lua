@@ -27,6 +27,7 @@ local DEFAULTS = {
         showHealPrediction = true,   -- the frame under the mouse shows what your left click heals or shields
         showAggro = true,
         showLowMana = true,        -- healers: "OOM" over the health bar at 20% mana or less
+        showFiveSecond = true,     -- your frame(s): a thin bar on the mana strip, draining over the 5 seconds after a cast
         showTooltips = true,
         showPets = false,
         showTargetFrame = false,   -- a frame for your target, above the group frames, while it is friendly
@@ -209,6 +210,22 @@ function NeoHeal:PARTY_LEADER_CHANGED()
     self.UnitButton:UpdateLeaders()
 end
 
+-- Your own spell went off, or a channel of yours started: the five-second bar
+-- (UnitButton.lua). Both events are registered for the "player" unit only, so the
+-- handler sees no one else's cast; the unit is still checked, because the client's
+-- docs mark the whole payload SecretWhenUnitSpellCastRestricted and a comparison
+-- with a constant is safe on a hidden value (docs/forever-api.md, section 2). That
+-- Forever fires them for your own casts, also in combat, is not checked in game.
+function NeoHeal:UNIT_SPELLCAST_SUCCEEDED(unit, castGUID, spellID)
+    if not self.db then return end   -- can fire while logging in
+    self.UnitButton.OnPlayerCast(unit, castGUID, spellID)
+end
+
+function NeoHeal:UNIT_SPELLCAST_CHANNEL_START(unit, castGUID, spellID)
+    if not self.db then return end
+    self.UnitButton.OnPlayerCast(unit, castGUID, spellID)
+end
+
 -- Ready check: answers show in the centre of each frame, and stay a few seconds
 -- after the check ends, like Blizzard's frames.
 local READY_CHECK_LINGER = 5   -- seconds
@@ -266,6 +283,17 @@ for _, event in ipairs({ "PLAYER_LOGIN", "PLAYER_REGEN_ENABLED", "PLAYER_REGEN_D
     -- Skip events this client doesn't know (registering one raises an error).
     if not C_EventUtils or C_EventUtils.IsEventValid(event) then
         eventFrame:RegisterEvent(event)
+    end
+end
+
+-- Your own casts, for the five-second bar: filtered to "player", as the unit a cast
+-- belongs to may be a hidden value; the handler checks it too. This file already
+-- needs RegisterUnitEvent for UNIT_TARGET above, so a client without it never loads
+-- NeoHeal either way. That Forever fires these events, also in combat, is not
+-- checked in game.
+for _, event in ipairs({ "UNIT_SPELLCAST_SUCCEEDED", "UNIT_SPELLCAST_CHANNEL_START" }) do
+    if not C_EventUtils or C_EventUtils.IsEventValid(event) then
+        eventFrame:RegisterUnitEvent(event, "player")
     end
 end
 

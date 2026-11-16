@@ -383,3 +383,30 @@ function TestPreview:testPetsDrawNoMemberExtras()
         lu.assertFalse(frame.absorb.shown, "the pet " .. name .. " shows a shield")
     end
 end
+
+-- AC8, S35, S36: with the option on, one fake healer (member 2, the priest who
+-- also stands in for the target and focus frames) shows the five-second bar part
+-- drained; no other member and no pet does, also on frames reused from before.
+-- With the option off, no fake frame shows it.
+function TestPreview:testFiveSecondBarOnOneFakeHealer()
+    local layout = self.ns.db.layout
+    layout.showFiveSecond, layout.showPets, layout.mainTankPosition = true, true, "first"
+    self.Preview:Show(40)   -- with the main tanks first, the pets' frames draw members now
+    layout.mainTankPosition = "none"
+    for _, frame in ipairs(self.Preview.frames) do frame.fiveSecond:Show() end
+    self.Preview:Show(40)
+    for _, entry in ipairs(self:Shown()) do
+        local bar = entry.frame.fiveSecond
+        if entry.name == "Seraphine" then
+            lu.assertTrue(bar.shown, "the fake healer shows no five-second bar")
+            lu.assertTrue(bar.value > 0 and bar.value < 1, "the fake healer's bar isn't part drained")
+        else
+            lu.assertFalse(bar.shown, entry.name .. " shows a five-second bar")
+        end
+    end
+    layout.showFiveSecond = false
+    self.Preview:Show(40)
+    for _, entry in ipairs(self:Shown()) do
+        lu.assertFalse(entry.frame.fiveSecond.shown, entry.name .. " shows a five-second bar with the option off")
+    end
+end

@@ -39,6 +39,7 @@ local state = {
     subtextMissing = false, -- C_Spell.GetSpellSubtext returns "" for everything
     modifiers = {},         -- held modifier keys: { shift = true, ... }
     descriptions = {},      -- [spellID] = description text
+    powerCosts = {},        -- [spellID] = what C_Spell.GetSpellPowerCost returns
 }
 
 local function Wipe(t)
@@ -55,7 +56,8 @@ local function CopyTableDeep(source)
 end
 
 -- A frame that keeps its scripts and registered events in frame.stub
--- (frame.stub.scripts.OnEvent, frame.stub.events.SOME_EVENT). Like a real frame,
+-- (frame.stub.scripts.OnEvent, frame.stub.events.SOME_EVENT; an event registered
+-- for some units only in frame.stub.unitEvents.SOME_EVENT = { units }). Like a real frame,
 -- registering an event the client doesn't know raises an error, every other
 -- method (a PascalCase name) does nothing, and any other field is nil until set.
 -- All frames created since the last Load are in Support.frames.
@@ -71,10 +73,11 @@ local function CheckEvent(action, event)
 end
 
 local function CreateFrameStub()
-    local frame = { stub = { scripts = {}, events = {} } }
+    local frame = { stub = { scripts = {}, events = {}, unitEvents = {} } }
     function frame:SetScript(name, func) self.stub.scripts[name] = func end
     function frame:RegisterEvent(event) CheckEvent("register", event); self.stub.events[event] = true end
     function frame:UnregisterEvent(event) CheckEvent("unregister", event); self.stub.events[event] = nil end
+    function frame:RegisterUnitEvent(event, ...) CheckEvent("register", event); self.stub.unitEvents[event] = { ... } end
     setmetatable(frame, { __index = function(_, key)
         if type(key) == "string" and key:match("^%u") then return NoOp end
     end })
@@ -89,10 +92,26 @@ local function InstallGlobals()
     Support.frames = {}
     CreateFrame = CreateFrameStub
     InCombatLockdown = function() return false end
-    C_Timer = { After = function(_, func) func() end, NewTicker = function() end }   -- no waiting in tests
+    -- A fake clock: GetTime gives Support.now (seconds), moved with Support.SetTime.
+    -- C_Timer.After still runs at once (no waiting in tests). NewTicker keeps each
+    -- ticker in Support.tickers ({ interval, func, cancelled }) and never runs it:
+    -- a test calls the update it wants at the moment it chose.
+    Support.now = 1000
+    GetTime = function() return Support.now end
+    Support.tickers = {}
+    C_Timer = {
+        After = function(_, func) func() end,
+        NewTicker = function(interval, func)
+            local ticker = { interval = interval, func = func, cancelled = false }
+            function ticker:Cancel() self.cancelled = true end
+            table.insert(Support.tickers, ticker)
+            return ticker
+        end,
+    }
     C_EventUtils = { IsEventValid = function() return true end }
     SlashCmdList = {}
-    Enum = { SpellBookSpellBank = { Player = 0 }, SpellBookItemType = { Spell = 1 }, TooltipDataType = { Unit = 2 } }
+    Enum = { SpellBookSpellBank = { Player = 0 }, SpellBookItemType = { Spell = 1 }, TooltipDataType = { Unit = 2 },
+             PowerType = { Mana = 0, Rage = 1, Energy = 3 } }
     UnitClass = function() return "Priest", "PRIEST" end
 
     -- Modifier keys: none held until Support.SetModifiers.
@@ -140,8 +159,16 @@ local function InstallGlobals()
         end,
         -- No description until a test sets one (Support.SetDescription).
         GetSpellDescription = function(spellID) return state.descriptions[spellID] end,
+        -- nil, as the game gives for a spell without a resource cost, until a test
+        -- sets one (Support.SetPowerCost); Support.COST_ERROR makes the call raise.
+        GetSpellPowerCost = function(spellID)
+            local cost = state.powerCosts[spellID]
+            if cost == Support.COST_ERROR then error("GetSpellPowerCost failed for " .. tostring(spellID)) end
+            return cost
+        end,
     }
     state.descriptions = {}
+    state.powerCosts = {}
     -- Strict like the game, which errors on a missing spell ID.
     IsPlayerSpell = function(spellID)
         assert(type(spellID) == "number", "IsPlayerSpell needs a spell ID")
@@ -173,6 +200,141 @@ end
 -- The text C_Spell.GetSpellDescription returns for a spell ID.
 function Support.SetDescription(spellID, text)
     state.descriptions[spellID] = text
+end
+
+-- The fake clock (GetTime), in seconds.
+function Support.SetTime(now)
+    Support.now = now
+end
+
+-- What C_Spell.GetSpellPowerCost returns for a spell ID: a list of cost entries
+-- (Support.ManaCost), nil, a hidden value, or Support.COST_ERROR to make it raise.
+Support.COST_ERROR = setmetatable({}, { __tostring = function() return "COST_ERROR" end })
+function Support.SetPowerCost(spellID, cost)
+    state.powerCosts[spellID] = cost
+end
+
+-- One cost entry list as the 12.x API describes SpellPowerCostInfo (type, name,
+-- cost, requiredAuraID, hasRequiredAura; field names from Blizzard's API docs,
+-- not checked in game). `changes` overrides fields, e.g. { cost = 0 } for a free
+-- cast or { name = "RAGE", type = 1 } for another resource.
+function Support.ManaCost(changes)
+    local entry = { type = 0, name = "MANA", cost = 100, minCost = 100, costPercent = 0, costPerSec = 0,
+                    requiredAuraID = 0, hasRequiredAura = false }
+    for key, value in pairs(changes or {}) do entry[key] = value end
+    return { entry }
+end
+
+-- A frame (a StatusBar too) that keeps what was done to it: shown (true until
+-- hidden, as a new frame in the game), its range, value, alpha, every
+-- SetAlphaFromBoolean argument as given (in alphaFromBoolean, never tested), and
+-- each recorded call in order (calls: { method, ... }). Any other method (a
+-- PascalCase name) records nothing and returns another Recorder, so chained calls
+-- such as bar:GetStatusBarTexture():SetVertexColor() work.
+function Support.Recorder(kind, name, parent)
+    local frame = { kind = kind, name = name, parent = parent, shown = true, min = 0, max = 1, value = 0,
+                    alpha = 1, alphaFromBoolean = {}, calls = {}, points = {} }
+    local function Record(method, ...) table.insert(frame.calls, { method, ... }) end
+    function frame:Show() Record("Show"); self.shown = true end
+    function frame:Hide() Record("Hide"); self.shown = false end
+    function frame:SetShown(shown) Record("SetShown", shown); self.shown = shown and true or false end
+    function frame:IsShown() return self.shown end
+    function frame:SetMinMaxValues(min, max) Record("SetMinMaxValues", min, max); self.min, self.max = min, max end
+    function frame:GetMinMaxValues() return self.min, self.max end
+    function frame:SetValue(value) Record("SetValue", value); self.value = value end
+    function frame:GetValue() return self.value end
+    function frame:SetAlpha(alpha) Record("SetAlpha", alpha); self.alpha = alpha end
+    function frame:SetAlphaFromBoolean(value, alphaIfTrue, alphaIfFalse)
+        Record("SetAlphaFromBoolean", value, alphaIfTrue, alphaIfFalse)
+        table.insert(self.alphaFromBoolean, value)
+    end
+    function frame:GetParent() return self.parent end
+    function frame:SetPoint(...) table.insert(self.points, { ... }) end
+    function frame:ClearAllPoints() self.points = {} end
+    function frame:SetHeight(height) self.height = height end
+    function frame:SetStatusBarTexture(texture) self.texture = texture end
+    function frame:SetStatusBarColor(...) self.barColor = { ... } end
+    function frame:SetText(text) self.text = text end
+    function frame:IsVisible() return self.shown end
+    function frame:GetFrameLevel() return 1 end
+    function frame:GetWidth() return 10 end
+    function frame:GetName() return self.name or "NeoHealTestFrame" end
+    function frame:SetAttribute(key, value) self.attributes = self.attributes or {}; self.attributes[key] = value end
+    function frame:GetAttribute(key) return (self.attributes or {})[key] end
+    function frame:SetScript(scriptName, func) self.scripts = self.scripts or {}; self.scripts[scriptName] = func end
+    function frame:HookScript(scriptName, func) self.hooks = self.hooks or {}; self.hooks[scriptName] = func end
+    function frame:CreateFontString() return Support.Recorder("FontString", nil, frame) end
+    function frame:CreateTexture() return Support.Recorder("Texture", nil, frame) end
+    return setmetatable(frame, { __index = function(_, key)
+        if type(key) == "string" and key:match("^%u") then
+            return function() return Support.Recorder("Object", nil, frame) end
+        end
+    end })
+end
+
+-- A value the game hides: any comparison, arithmetic or indexing raises an error,
+-- as on a real secret value, and issecretvalue (as Support.LoadUnitButtons
+-- installs it) says it is one.
+Support.hidden = {}
+function Support.Secret(name)
+    local function refuse() error("used the secret " .. name, 2) end
+    local secret = setmetatable({}, { __eq = refuse, __lt = refuse, __le = refuse, __add = refuse, __sub = refuse,
+                                      __mul = refuse, __div = refuse, __unm = refuse, __concat = refuse,
+                                      __len = refuse, __index = refuse, __call = refuse,
+                                      __tostring = function() return "secret " .. name end })
+    Support.hidden[secret] = true
+    return secret
+end
+
+-- Core, the click casting and UnitButton.lua loaded for real unit buttons on
+-- Recorder frames (Support.RealButton). The unit API answers as for a living,
+-- connected player with a mana strip who is no leader, has no raid marker and
+-- nobody's resurrection coming; a test changes an answer with `override(name,
+-- value)`, its own file's Override, so it is put back after the test. The modules
+-- a button only hands work to (HoT icons, missing buffs, aura icons, dispels) do
+-- nothing here.
+function Support.LoadUnitButtons(override)
+    local ns = Support.Load({ "Locales/enUS.lua" })
+    Support.hidden = {}
+    issecretvalue = function(value) return value ~= nil and Support.hidden[value] == true end   -- Core reads it when it loads
+    Support.LoadInto(ns, { "Core.lua", "Spells.lua", "ClickCast.lua", "UnitButton.lua" })
+    override("CreateFrame", function(kind, name, parent) return Support.Recorder(kind, name, parent) end)
+    override("SecureHandlerWrapScript", NoOp)
+    override("unpack", unpack or table.unpack)
+    override("PowerBarColor", { MANA = { r = 0, g = 0, b = 1 } })
+    override("UnitExists", function() return true end)
+    override("UnitIsConnected", function() return true end)
+    override("UnitIsDeadOrGhost", function() return false end)
+    override("UnitPowerType", function() return 0, "MANA" end)
+    override("UnitHealth", function() return 50 end)
+    override("UnitInRange", function() return true, true end)
+    override("UnitHealthMax", function() return 100 end)
+    override("UnitHealthPercent", nil)
+    override("UnitPower", function() return 50 end)
+    override("UnitPowerMax", function() return 100 end)
+    override("UnitPowerPercent", nil)
+    override("C_CurveUtil", nil)
+    for _, name in ipairs({ "UnitIsPlayer", "UnitName", "UnitIsGroupAssistant", "UnitIsGroupLeader", "GetRaidTargetIndex",
+                            "UnitInRaid", "UnitHasIncomingResurrection", "UnitCanAttack" }) do
+        override(name, NoOp)
+    end
+    local function Module() return setmetatable({}, { __index = function() return NoOp end }) end
+    ns.Hots, ns.MissingBuffs, ns.AuraContainer = Module(), Module(), Module()
+    ns.Dispel = { known = {}, COLORS = {}, CanDispelAnything = function() return false end }
+    ns.ClickCast.ApplyToButton = NoOp
+    ns.charDB = { bindings = {}, hoverKeys = {} }   -- no left click spell: target and focus frames stay bright
+    ns.db = { layout = { showFiveSecond = true, powerBar = "all", healthColor = "class", healthText = "none" } }
+    return ns
+end
+
+-- A real unit button (UnitButton.Init on a Recorder), given `unit` the way a group
+-- header gives it one (the "unit" attribute), or no unit yet.
+function Support.RealButton(ns, unit)
+    local button = Support.Recorder("Button", "NeoHealTestButton")
+    ns.UnitButton.Init(button)
+    button.dispelContainer, button.raidDebuffContainer = {}, {}   -- so a new unit builds no aura icons
+    if unit then button.hooks.OnAttributeChanged(button, "unit", unit) end
+    return button
 end
 
 -- Which modifier keys are held, e.g. { shift = true, ctrl = true }.
