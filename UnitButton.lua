@@ -191,13 +191,51 @@ local function HasAura(unit, name, filter)
     return false
 end
 
--- Whether a shield cast now would land and add to what the unit has: no Weakened
--- Soul and no Power Word: Shield on it. False when that can't be told (hidden
--- auras, or a name the game doesn't give): a shield that may not land is not predicted.
-local function CanTakeShield(unit)
+-- Whether a Power Word: Shield cast now would land and add to what the unit has:
+-- no Weakened Soul and no Power Word: Shield on it. False when that can't be told
+-- (hidden auras, or a name the game doesn't give): a shield that may not land is
+-- not predicted.
+local function CanTakePowerWordShield(unit)
     local weakenedSoul, shield = C_Spell.GetSpellName(WEAKENED_SOUL), C_Spell.GetSpellName(POWER_WORD_SHIELD)
     if not weakenedSoul or not shield then return false end
     return HasAura(unit, weakenedSoul, "HARMFUL") == false and HasAura(unit, shield, "HELPFUL") == false
+end
+
+-- Whether the frame shows you. "player" is the plain string the game calls your
+-- own frame, so no lookup is needed there; every other unit (your "raidN" in a
+-- raid, the target and focus frames) is compared with the game, whose answer the
+-- game may hide on maps where it restricts addons (docs/forever-api.md, section 2)
+-- -- and a hidden answer shows nothing, as a shield that may not land there isn't
+-- predicted. So your own frame keeps its bar on such a map and a raid frame
+-- doesn't. Not checked in game.
+local function ShowsThePlayer(unit)
+    return unit == "player" or IsTrue(UnitIsUnit(unit, "player"))
+end
+
+-- Whether a shield that only goes on you would land and add to what the unit has:
+-- one aura of its own name keeps it off, of any rank (the name is the same for
+-- every rank, as Spells.lua groups a spell by name), and the spell has no such
+-- aura on you. Weakened Soul and Power Word: Shield are not asked: they stop only
+-- a new Power Word: Shield. False when that can't be told (hidden auras, or the
+-- game gives no name for the spell): a shield that may not land is not predicted.
+local function CanTakeOwnShield(unit, name)
+    if not ShowsThePlayer(unit) then return false end
+    return HasAura(unit, name, "HELPFUL") == false
+end
+
+-- Whether a shield cast with this spell would land and add to what the unit has.
+-- Power Word: Shield is the one shield with the rules above; told apart by name,
+-- never by its description, because a description is English-only text that the
+-- game may word in a way no test here can foresee. Every other absorb takes the
+-- rule for a shield that only goes on you: that this covers them all is an
+-- assumption about the game's content, not checked in game, and it errs to a bar
+-- missing where it could show, never a bar on a frame the shield never reaches.
+-- False when the game gives no name for either spell.
+local function CanTakeShield(unit, spellID)
+    local name, powerWordShield = C_Spell.GetSpellName(spellID), C_Spell.GetSpellName(POWER_WORD_SHIELD)
+    if not name or not powerWordShield then return false end
+    if name == powerWordShield then return CanTakePowerWordShield(unit) end
+    return CanTakeOwnShield(unit, name)
 end
 
 -- Heal prediction: what your left click, with the modifiers held now, would heal
@@ -205,17 +243,18 @@ end
 -- incoming heals. The lowest amount, which the heal always reaches, is drawn
 -- lighter than incoming heals; the rest of the range up to the highest amount,
 -- which it may reach, in the same green but fainter. A shield on the left click
--- shows its absorb instead, in the blue of the tooltip. The amounts are plain
--- numbers, so heals show in combat too (seen in game on 2026-10-04): the StatusBar
--- places them against the secret maximum.
+-- shows its absorb instead, in the blue of the tooltip, where that shield would
+-- land (CanTakeShield). The amounts are plain numbers, so heals show in combat too
+-- (seen in game on 2026-10-04): the StatusBar places them against the secret
+-- maximum.
 local function UpdateHealPrediction(button)
     local unit = button.unit
-    local low, high, kind
+    local low, high, kind, spellID
     if button == hoveredButton and NeoHeal.db.layout.showHealPrediction and unit and not IsDeadOrOffline(unit) then
-        low, high, kind = NeoHeal.ClickCast:GetLeftClickAmount()
+        low, high, kind, spellID = NeoHeal.ClickCast:GetLeftClickAmount()
     end
     local heal = kind == "heal" and low
-    local absorb = kind == "absorb" and CanTakeShield(unit) and low
+    local absorb = kind == "absorb" and CanTakeShield(unit, spellID) and low
     ShowAmountBar(button.prediction, unit, heal)
     ShowAmountBar(button.predictionRange, unit, heal and high - low)
     ShowAmountBar(button.predictionAbsorb, unit, absorb)

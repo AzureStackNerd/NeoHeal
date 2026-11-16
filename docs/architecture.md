@@ -207,12 +207,19 @@ charDB.bindings["shift-2"] = { action="spell", spellID=139, highestRank=true, ta
   on the button under the mouse (`hoveredButton`, set by `OnEnter` and cleared
   by `OnLeave`, which also runs a frame after the button hides if it stays
   hidden). `ClickCast:GetLeftClickAmount` gives the lowest and highest amount of
-  the applied left-click binding for the modifiers held now, and whether it heals
-  or absorbs, read the same way as the tooltip amounts. Two bars after the
-  incoming heals show a heal's lowest amount and the rest of its range; a third
-  shows a shield's absorb, unless `CanTakeShield` finds Weakened Soul or a
-  Power Word: Shield on the unit, or can't read its auras (in combat). The
-  shields come after them. `AnchorAmountBars` starts each shown bar at the end
+  the applied left-click binding for the modifiers held now, whether it heals
+  or absorbs, and the spell it casts, read the same way as the tooltip amounts.
+  Two bars after the incoming heals show a heal's lowest amount and the rest of
+  its range; a third shows a shield's absorb, unless `CanTakeShield` says the
+  shield would not land. That check tells Power Word: Shield from every other
+  absorb by the bound rank's spell name (never by the description, which is
+  English-only text no test can foresee): Power Word: Shield takes
+  `CanTakePowerWordShield`, unless a Weakened Soul or a Power Word: Shield is on
+  the unit; every other absorb is treated as a shield that only goes on you, and
+  takes `CanTakeOwnShield`, which asks `ShowsThePlayer` (the plain unit `player`,
+  else `UnitIsUnit`) and refuses while an aura of the shield's own name is up. A
+  hidden aura, a hidden name or a hidden `UnitIsUnit` refuses. That the other
+  absorbs only go on you is not checked in game. The shields come after them. `AnchorAmountBars` starts each shown bar at the end
   of the last shown one, skipping hidden bars (in game a hidden, emptied bar
   kept its old fill width: [forever-api.md](forever-api.md), section 5).
   `UpdateHealth` and `UpdateAuras` redraw it, and while the mouse is over a

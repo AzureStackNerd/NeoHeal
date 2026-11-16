@@ -7,14 +7,21 @@ local Support = {
 }
 
 -- The fake spells. Flash Heal has seven ranks; Abolish Disease has one and no
--- rank text, like rankless spells in the game. Weakened Soul and Power Word:
--- Shield only have a name, for matching auras: they are in no spellbook.
+-- rank text, like rankless spells in the game. Weakened Soul only has a name, for
+-- matching auras. Power Word: Shield (ranks 1 and 10) and Ice Barrier (rank 1) are
+-- in no spellbook unless a test passes them to Load or SetKnown. The ids of Power
+-- Word: Shield rank 10 and Ice Barrier are Classic's as far as known, not checked in game.
 local FLASH_HEAL = { 2061, 9472, 9473, 9474, 10915, 10916, 10917 }   -- rank 1 to 7
 local ABOLISH_DISEASE = 552
 local WEAKENED_SOUL = 6788
 local POWER_WORD_SHIELD = 17
+local POWER_WORD_SHIELD_10 = 10901
+local ICE_BARRIER = 11426
 Support.FLASH_HEAL = FLASH_HEAL
 Support.ABOLISH_DISEASE = ABOLISH_DISEASE
+Support.POWER_WORD_SHIELD = POWER_WORD_SHIELD
+Support.POWER_WORD_SHIELD_10 = POWER_WORD_SHIELD_10
+Support.ICE_BARRIER = ICE_BARRIER
 
 local CATALOGUE = {}   -- [spellID] = { name, subName }
 for rank, spellID in ipairs(FLASH_HEAL) do
@@ -23,6 +30,8 @@ end
 CATALOGUE[ABOLISH_DISEASE] = { name = "Abolish Disease", subName = "" }
 CATALOGUE[WEAKENED_SOUL] = { name = "Weakened Soul", subName = "" }
 CATALOGUE[POWER_WORD_SHIELD] = { name = "Power Word: Shield", subName = "Rank 1" }
+CATALOGUE[POWER_WORD_SHIELD_10] = { name = "Power Word: Shield", subName = "Rank 10" }
+CATALOGUE[ICE_BARRIER] = { name = "Ice Barrier", subName = "Rank 1" }
 
 local state = {
     book = {},              -- spell IDs in the spellbook, in order

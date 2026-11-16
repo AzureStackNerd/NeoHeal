@@ -227,13 +227,22 @@ game on 2026-10-04): the amounts are NeoHeal's own numbers, the bar places them
 against the member's (hidden) maximum health, and the game still gives the spell
 description then.
 
-A shield on the left click (Power Word: Shield) shows its absorb instead, in the
-blue of its tooltip amount, where the shield will go. It doesn't show on a member
-with Weakened Soul, whoever's shield left it, as the cast would fail, nor on one
-whose Power Word: Shield is still up (it outlasts Weakened Soul), as a new one
-wouldn't add to it. In combat the game hides auras from addons, so neither can
-be ruled out and no shield prediction shows (seen in game on 2026-10-04, as was
-the shield prediction out of combat).
+A shield on the left click shows its absorb instead, in the blue of its tooltip
+amount, where the shield will go. Power Word: Shield shows on any member's frame.
+It doesn't show on a member with Weakened Soul, whoever's shield left it, as the
+cast would fail, nor on one whose Power Word: Shield is still up (it outlasts
+Weakened Soul), as a new one wouldn't add to it. A shield other than Power Word:
+Shield is treated as one that only goes on you, such as a Mage's Ice Barrier: it
+shows only on a frame that shows you (your own frame, your own raid frame, or the
+target or focus frame while it shows you), and nowhere else. Where the game hides
+whether a frame is you, it shows nothing there. Such a shield doesn't show while
+its own shield is still up on you, as a new one wouldn't add to it. It does show
+with Weakened Soul or a Power Word: Shield on you, whoever's, as those only stop a
+new Power Word: Shield. In combat the game hides auras from addons, so none of
+this can be told and no shield prediction shows (seen in game on 2026-10-04, as
+was the shield prediction out of combat). That shields other than Power Word:
+Shield only go on you, which absorbs beside it read as shields, and whether the
+game hides whether a raid frame is you are not checked in game.
 
 Nothing shows when the left click:
 

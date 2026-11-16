@@ -3,6 +3,11 @@
 local lu = require("luaunit")
 local Support = require("support")
 local FLASH_HEAL = Support.FLASH_HEAL
+local POWER_WORD_SHIELD, ICE_BARRIER = Support.POWER_WORD_SHIELD, Support.ICE_BARRIER
+
+-- Every fake spell learned: Flash Heal, Abolish Disease and both shields.
+local KNOWN = { Support.ABOLISH_DISEASE, POWER_WORD_SHIELD, Support.POWER_WORD_SHIELD_10, ICE_BARRIER }
+for _, spellID in ipairs(FLASH_HEAL) do table.insert(KNOWN, spellID) end
 
 local function Spell(spellID, highestRank, target)
     return { action = "spell", spellID = spellID, highestRank = highestRank, target = target or "unit" }
@@ -18,10 +23,25 @@ local function Describe()
     Support.SetDescription(FLASH_HEAL[3], RANK_3)
 end
 
+-- Power Word: Shield's own id on the plain left click: the bar tells it from
+-- another shield by the bound rank's name, not by the description.
+local function BindShield(bindings)
+    Support.SetDescription(POWER_WORD_SHIELD, SHIELD)
+    bindings["1"] = Spell(POWER_WORD_SHIELD, false)
+end
+
+-- A shield that only goes on you. The fake's wording, not checked against the game's.
+local ICE_BARRIER_TEXT = "Instantly shields you with a barrier of ice, absorbing 438 damage. Lasts 1 min."
+
+local function BindIceBarrier(bindings, key)
+    Support.SetDescription(ICE_BARRIER, ICE_BARRIER_TEXT)
+    bindings[key or "1"] = Spell(ICE_BARRIER, false)
+end
+
 TestLeftClickHeal = {}
 
 function TestLeftClickHeal:setUp()
-    local ns = Support.Load({ "Locales/enUS.lua", "Core.lua", "Spells.lua", "ClickCast.lua" })
+    local ns = Support.Load({ "Locales/enUS.lua", "Core.lua", "Spells.lua", "ClickCast.lua" }, KNOWN)
     ns.Spells:Scan()
     ns.charDB = { bindings = {}, hoverKeys = {} }
     Describe()
@@ -35,14 +55,14 @@ end
 -- "Highest rank" on rank 1: the numbers are those of rank 7, without the commas.
 function TestLeftClickHeal:testTheRangeOfTheRankTheClickCasts()
     self.bindings["1"] = Spell(FLASH_HEAL[1], true)
-    lu.assertEquals(self:Heal(), { 1887, 2193, "heal" })
+    lu.assertEquals(self:Heal(), { 1887, 2193, "heal", FLASH_HEAL[7] })
 end
 
 function TestLeftClickHeal:testTheHeldModifierPicksTheBinding()
     self.bindings["1"] = Spell(FLASH_HEAL[7], true)
     self.bindings["shift-1"] = Spell(FLASH_HEAL[3], false)
     Support.SetModifiers({ shift = true })
-    lu.assertEquals(self:Heal(), { 327, 394, "heal" })
+    lu.assertEquals(self:Heal(), { 327, 394, "heal", FLASH_HEAL[3] })
 end
 
 -- Two modifiers held: the click does nothing, so it heals nothing either.
@@ -61,13 +81,12 @@ end
 function TestLeftClickHeal:testASingleAmountIsBothLowAndHigh()
     Support.SetDescription(FLASH_HEAL[7], HOT)
     self.bindings["1"] = Spell(FLASH_HEAL[7], false)
-    lu.assertEquals(self:Heal(), { 45, 45, "heal" })
+    lu.assertEquals(self:Heal(), { 45, 45, "heal", FLASH_HEAL[7] })
 end
 
 function TestLeftClickHeal:testAShieldGivesItsAbsorb()
-    Support.SetDescription(FLASH_HEAL[7], SHIELD)
-    self.bindings["1"] = Spell(FLASH_HEAL[7], false)
-    lu.assertEquals(self:Heal(), { 942, 942, "absorb" })
+    BindShield(self.bindings)
+    lu.assertEquals(self:Heal(), { 942, 942, "absorb", POWER_WORD_SHIELD })
 end
 
 function TestLeftClickHeal:testNothingWhenTheClickDoesntHealTheClickedUnit()
@@ -105,7 +124,7 @@ end
 function TestLeftClickHeal:testTheBindingsInEffectNotTheEditedOnes()
     self.bindings["1"] = Spell(FLASH_HEAL[7], false)
     self.ClickCast.appliedBindings = { ["1"] = Spell(FLASH_HEAL[3], false) }
-    lu.assertEquals(self:Heal(), { 327, 394, "heal" })
+    lu.assertEquals(self:Heal(), { 327, 394, "heal", FLASH_HEAL[3] })
 end
 
 -- Should the game hide a description in combat, it is not read.
@@ -127,7 +146,7 @@ TestHealPrediction = {}
 
 -- `isSecret` (optional) stands in for the game's issecretvalue.
 function TestHealPrediction:setUp(isSecret)
-    local ns = Support.Load({ "Locales/enUS.lua" })
+    local ns = Support.Load({ "Locales/enUS.lua" }, KNOWN)
     issecretvalue = isSecret
     Support.LoadInto(ns, { "Core.lua", "Spells.lua", "ClickCast.lua", "UnitButton.lua" })
     ns.Spells:Scan()
@@ -266,7 +285,7 @@ end
 
 -- A shield on the left click goes in the shield bar; the heal bars stay empty.
 function TestHealPrediction:testALeftClickShieldShowsItsAbsorb()
-    Support.SetDescription(FLASH_HEAL[7], SHIELD)
+    BindShield(self.ns.charDB.bindings)
     self.UnitButton.OnEnter(self.button)
     lu.assertEquals(self:Bars(), HIDDEN)
     lu.assertEquals(self:Shield(), 942)
@@ -274,14 +293,14 @@ end
 
 -- Weakened Soul, from anyone's shield, means the shield can't be cast.
 function TestHealPrediction:testNoShieldOnWeakenedSoul()
-    Support.SetDescription(FLASH_HEAL[7], SHIELD)
+    BindShield(self.ns.charDB.bindings)
     self.debuffs = { { name = "Forbearance" }, { name = "Weakened Soul" } }
     self.UnitButton.OnEnter(self.button)
     lu.assertEquals(self:Shield(), "hidden")
 end
 
 function TestHealPrediction:testOtherAurasKeepTheShield()
-    Support.SetDescription(FLASH_HEAL[7], SHIELD)
+    BindShield(self.ns.charDB.bindings)
     self.buffs = { { name = "Renew" } }
     self.debuffs = { { name = "Forbearance" } }
     self.UnitButton.OnEnter(self.button)
@@ -290,7 +309,7 @@ end
 
 -- A shield still up (it outlasts Weakened Soul): a new one doesn't add to it.
 function TestHealPrediction:testNoShieldOnAShieldStillUp()
-    Support.SetDescription(FLASH_HEAL[7], SHIELD)
+    BindShield(self.ns.charDB.bindings)
     self.buffs = { { name = "Renew" }, { name = "Power Word: Shield" } }
     self.UnitButton.OnEnter(self.button)
     lu.assertEquals(self:Shield(), "hidden")
@@ -299,7 +318,7 @@ end
 -- Should the game not give the name of Weakened Soul or of Power Word: Shield,
 -- that aura can't be ruled out.
 function TestHealPrediction:testNoShieldWithoutASpellName()
-    Support.SetDescription(FLASH_HEAL[7], SHIELD)
+    BindShield(self.ns.charDB.bindings)
     local getName = C_Spell.GetSpellName
     for _, unnamed in ipairs({ 6788, 17 }) do
         C_Spell.GetSpellName = function(spellID)
@@ -315,7 +334,7 @@ end
 -- shield shows nothing rather than a shield that may not land. The game refuses
 -- (an error) or hands out a secret aura.
 function TestHealPrediction:testNoShieldWhenTheAurasAreRefused()
-    Support.SetDescription(FLASH_HEAL[7], SHIELD)
+    BindShield(self.ns.charDB.bindings)
     C_UnitAuras.GetAuraDataByIndex = function() error("Auras cannot be accessed when secret while tainted") end
     self.UnitButton.OnEnter(self.button)
     lu.assertEquals(self:Shield(), "hidden")
@@ -324,7 +343,7 @@ end
 function TestHealPrediction:testNoShieldWhenTheAurasAreSecret()
     local hidden = { name = "Something hidden" }
     self:setUp(function(value) return value == hidden end)
-    Support.SetDescription(FLASH_HEAL[7], SHIELD)
+    BindShield(self.ns.charDB.bindings)
     self.debuffs = { hidden }
     self.UnitButton.OnEnter(self.button)
     lu.assertEquals(self:Shield(), "hidden")
@@ -333,7 +352,7 @@ end
 -- The aura readable, only its name secret.
 function TestHealPrediction:testNoShieldWhenAnAuraNameIsSecret()
     self:setUp(function(value) return value == "Something hidden" end)
-    Support.SetDescription(FLASH_HEAL[7], SHIELD)
+    BindShield(self.ns.charDB.bindings)
     self.debuffs = { { name = "Something hidden" } }
     self.UnitButton.OnEnter(self.button)
     lu.assertEquals(self:Shield(), "hidden")
@@ -390,7 +409,7 @@ function TestHealPrediction:testIncomingHealsAndShieldsAnchorWhenTheyChange()
 end
 
 function TestHealPrediction:testAPredictedShieldStartsAfterTheIncomingHeals()
-    Support.SetDescription(FLASH_HEAL[7], SHIELD)
+    BindShield(self.ns.charDB.bindings)
     self.button.incoming:Show()
     self.UnitButton.OnEnter(self.button)
     lu.assertEquals(self:Anchors(), { incoming = "health", predictionAbsorb = "incoming" })
@@ -405,4 +424,279 @@ function TestHealPrediction:testTheTooltipAndThePredictionShareTheWatcher()
     PressModifiers({ shift = true })
     lu.assertEquals(self:Bars(), { 327, 394 - 327 })
     lu.assertEquals(GameTooltip.lines[#GameTooltip.lines], { "double", "Left click", "Flash Heal (Rank 3) |cff33ff33327-394|r" })
+end
+
+-- Which shield rule applies (issue #12): Power Word: Shield's on any member's frame,
+-- every other absorb only on a frame that shows you. Ice Barrier stands in for a
+-- shield that only goes on you; Power Word: Shield absorbs 942, Ice Barrier 438.
+
+-- Hovers a frame of this unit, reads its shield bar and leaves it again.
+function TestHealPrediction:ShieldOn(unit)
+    self.button = Support.FakeButton(unit)
+    self.UnitButton.OnEnter(self.button)
+    local shown = self:Shield()
+    self.UnitButton.OnLeave(self.button)
+    return shown
+end
+
+-- AC1, S6 to S8 and S10: UnitIsUnit tells which frames show you here: your raid
+-- frame raid3, and the target frame while you target yourself.
+function TestHealPrediction:testAShieldThatOnlyGoesOnYouShowsOnlyOnAFrameThatShowsYou()
+    BindIceBarrier(self.ns.charDB.bindings)
+    UnitIsUnit = function(a, b) return a == b or ((a == "raid3" or a == "target") and b == "player") end
+    self.debuffs = { { name = "Weakened Soul" } }   -- S6: whatever the unit's auras
+    lu.assertEquals(self:ShieldOn("party1"), "hidden", "another member's frame")
+    self.debuffs = {}
+    lu.assertEquals(self:ShieldOn("partypet1"), "hidden", "a pet's frame")
+    lu.assertEquals(self:ShieldOn("raid5"), "hidden", "another raid member's frame")
+    lu.assertEquals(self:ShieldOn("focus"), "hidden", "the focus frame on someone else")
+    lu.assertEquals(self:ShieldOn("player"), 438, "your own frame")
+    lu.assertEquals(self:ShieldOn("raid3"), 438, "your own raid frame")
+    lu.assertEquals(self:ShieldOn("target"), 438, "the target frame on you")
+end
+
+-- AC1, S9 (and S7): where the game hides whether a frame shows you, a raid, target
+-- or focus frame shows nothing; your own frame is "player" and needs no answer.
+function TestHealPrediction:testAShieldThatOnlyGoesOnYouShowsNothingWhereTheGameHidesWhoIsYou()
+    local secret = {}
+    self:setUp(function(value) return rawequal(value, secret) end)
+    BindIceBarrier(self.ns.charDB.bindings)
+    UnitIsUnit = function() return secret end
+    lu.assertEquals(self:ShieldOn("raid3"), "hidden", "a raid frame")
+    lu.assertEquals(self:ShieldOn("target"), "hidden", "the target frame")
+    lu.assertEquals(self:ShieldOn("focus"), "hidden", "the focus frame")
+    lu.assertEquals(self:ShieldOn("player"), 438, "your own frame")
+end
+
+-- AC1, S16: the shield on Shift + left click, Flash Heal on the plain left click.
+function TestHealPrediction:testAShieldOnAModifierFollowsTheModifierAndTheFrame()
+    BindIceBarrier(self.ns.charDB.bindings, "shift-1")
+    self.ns.charDB.bindings["1"] = Spell(FLASH_HEAL[7], false)
+    local own = Support.FakeButton("player")
+    self.UnitButton.OnEnter(self.button)   -- party1
+    lu.assertEquals({ self:Bars(), self:Shield() }, { { 1887, 2193 - 1887 }, "hidden" }, "party1")
+    PressModifiers({ shift = true })
+    lu.assertEquals({ self:Bars(), self:Shield() }, { HIDDEN, "hidden" }, "party1 with Shift")
+    self.UnitButton.OnLeave(self.button)
+    self.button = own
+    self.UnitButton.OnEnter(own)
+    lu.assertEquals({ self:Bars(), self:Shield() }, { HIDDEN, 438 }, "your own frame with Shift")
+    PressModifiers({})
+    lu.assertEquals({ self:Bars(), self:Shield() }, { { 1887, 2193 - 1887 }, "hidden" }, "Shift released")
+end
+
+-- AC2, S11: Weakened Soul and a Power Word: Shield on you only stop a new Power Word: Shield.
+function TestHealPrediction:testPowerWordShieldsAurasLeaveAnotherShieldShowing()
+    BindIceBarrier(self.ns.charDB.bindings)
+    local cases = {
+        ["Weakened Soul"] = { {}, { { name = "Weakened Soul" } } },
+        ["a Power Word: Shield"] = { { { name = "Power Word: Shield" } }, {} },
+        ["both"] = { { { name = "Power Word: Shield" } }, { { name = "Weakened Soul" } } },
+    }
+    for name, auras in pairs(cases) do
+        self.buffs, self.debuffs = auras[1], auras[2]
+        lu.assertEquals(self:ShieldOn("player"), 438, name)
+    end
+end
+
+-- AC2, S12 and S13: nothing while its own aura is up, or while that can't be told.
+function TestHealPrediction:testAnotherShieldShowsNothingWhileItsOwnIsUpOrTheAurasAreHidden()
+    BindIceBarrier(self.ns.charDB.bindings)
+    self.buffs = { { name = "Renew" }, { name = "Ice Barrier" } }
+    lu.assertEquals(self:ShieldOn("player"), "hidden", "its own aura up")
+    self.buffs = {}
+
+    local getAuras = C_UnitAuras.GetAuraDataByIndex
+    C_UnitAuras.GetAuraDataByIndex = function() error("Auras cannot be accessed when secret while tainted") end
+    lu.assertEquals(self:ShieldOn("player"), "hidden", "auras refused in combat")
+    C_UnitAuras.GetAuraDataByIndex = getAuras
+
+    local getName = C_Spell.GetSpellName
+    for _, unnamed in ipairs({ ICE_BARRIER, POWER_WORD_SHIELD }) do
+        C_Spell.GetSpellName = function(spellID)
+            if spellID ~= unnamed then return getName(spellID) end
+        end
+        lu.assertEquals(self:ShieldOn("player"), "hidden", "no name for spell " .. unnamed)
+    end
+    C_Spell.GetSpellName = getName
+    lu.assertEquals(self:ShieldOn("player"), 438, "nothing in the way")
+end
+
+function TestHealPrediction:testAnotherShieldShowsNothingWhenTheAurasAreSecret()
+    local hidden = { name = "Something hidden" }
+    self:setUp(function(value) return value == hidden end)
+    BindIceBarrier(self.ns.charDB.bindings)
+    self.buffs = { hidden }
+    lu.assertEquals(self:ShieldOn("player"), "hidden")
+end
+
+-- AC3, S1 and S2: Power Word: Shield on your own frames too, any rank (told by its
+-- name), and another shield's aura up doesn't stop it.
+function TestHealPrediction:testPowerWordShieldShowsOnYourOwnFrame()
+    BindShield(self.ns.charDB.bindings)
+    UnitIsUnit = function(a, b) return a == b or (a == "raid3" and b == "player") end
+    lu.assertEquals(self:ShieldOn("player"), 942, "your own frame")
+    lu.assertEquals(self:ShieldOn("raid3"), 942, "your own raid frame")
+    self.buffs = { { name = "Ice Barrier" } }
+    lu.assertEquals(self:ShieldOn("party1"), 942, "party1 with their own Ice Barrier up")
+    self.buffs = {}
+
+    Support.SetDescription(Support.POWER_WORD_SHIELD_10, SHIELD)
+    self.ns.charDB.bindings["1"] = Spell(Support.POWER_WORD_SHIELD_10, false)
+    lu.assertEquals(self:ShieldOn("party1"), 942, "rank 10 on party1")
+    self.debuffs = { { name = "Weakened Soul" } }
+    lu.assertEquals(self:ShieldOn("party1"), "hidden", "rank 10 on Weakened Soul")
+end
+
+-- AC4, S17: a heal shows its bars whatever the shield rules would say.
+function TestHealPrediction:testAHealIgnoresTheShieldRules()
+    local heal = { { 1887, 2193 - 1887 }, "hidden" }
+    self.buffs, self.debuffs = { { name = "Power Word: Shield" } }, { { name = "Weakened Soul" } }
+    self.UnitButton.OnEnter(self.button)
+    lu.assertEquals({ self:Bars(), self:Shield() }, heal, "Weakened Soul and a shield up")
+    self.UnitButton.OnLeave(self.button)
+    C_UnitAuras.GetAuraDataByIndex = function() error("Auras cannot be accessed when secret while tainted") end
+    self.UnitButton.OnEnter(self.button)
+    lu.assertEquals({ self:Bars(), self:Shield() }, heal, "auras hidden in combat")
+end
+
+-- The redraws while the mouse stays on a frame (S14, S15, S18, S19), through the
+-- real UnitButton chain: UpdateAll for a roster or target change, UpdateAuras for
+-- an aura change. The button is wider than Support.FakeButton: every other part
+-- of the frame is a stand-in that does nothing.
+TestShieldRedraws = {}
+
+local overridden = {}
+
+-- Sets a global for this test; tearDown puts the old value back.
+local function Override(name, value)
+    if overridden[name] == nil then overridden[name] = { _G[name] } end
+    _G[name] = value
+end
+
+local function Restore()
+    for name, old in pairs(overridden) do _G[name] = old[1] end
+    overridden = {}
+end
+
+-- Any PascalCase method does nothing; any other field is such an object too.
+local function StandIn(object)
+    return setmetatable(object or {}, { __index = function(self, key)
+        if type(key) ~= "string" then return nil end
+        if key:match("^%u") then return function() end end
+        local part = StandIn()
+        rawset(self, key, part)
+        return part
+    end })
+end
+
+local function WideButton(unit)
+    local button = Support.FakeButton(unit)
+    for _, value in pairs(button) do
+        if type(value) == "table" and getmetatable(value) == nil then StandIn(value) end
+    end
+    button.health.SetPoint = function() end   -- ApplyStyle places it by numbers
+    return StandIn(button)
+end
+
+function TestShieldRedraws:setUp()
+    local ns = Support.Load({ "Locales/enUS.lua", "Core.lua", "Spells.lua", "ClickCast.lua", "UnitButton.lua" }, KNOWN)
+    ns.Spells:Scan()
+    ns.charDB = { bindings = {}, hoverKeys = {} }
+    BindIceBarrier(ns.charDB.bindings)
+    ns.db = { layout = { showTooltips = false, showHealPrediction = true } }
+    ns.Hots = { SetUnit = function() end, Update = function() end }
+    ns.MissingBuffs = { Update = function() end }
+    ns.AuraContainer = { SetUnit = function() end, SetShown = function() end }
+    ns.Layout = { PresetChanged = function() return false end, Arrange = function() end }
+    ns.Blizzard = { ApplyHiding = function() end }
+
+    -- Who is you: changed by each test.
+    self.you = { player = true }
+    Override("UnitIsUnit", function(a, b)
+        return a == b or (b == "player" and self.you[a] == true)
+    end)
+    self.buffs, self.debuffs = {}, {}
+    C_UnitAuras = {
+        GetAuraDataByIndex = function(_, index, filter)
+            if filter == "HELPFUL" then return self.buffs[index] end
+            if filter == "HARMFUL" then return self.debuffs[index] end
+        end,
+    }
+    Override("UnitExists", function() return true end)
+    Override("UnitIsConnected", function() return true end)
+    Override("UnitIsDeadOrGhost", function() return false end)
+    Override("UnitHealth", function() return 2000 end)
+    Override("UnitHealthMax", function() return MAX_HEALTH end)
+    Override("UnitPowerMax", function() return 0 end)
+    Override("UnitName", function() return "Someone" end)
+    Override("UnitIsPlayer", function() return false end)
+    for _, name in ipairs({ "UnitIsGroupAssistant", "UnitIsGroupLeader", "UnitGroupRolesAssigned", "GetRaidTargetIndex",
+                            "UnitHasIncomingResurrection", "UnitInRaid", "UnitPowerType", "UnitInRange",
+                            "UnitGetTotalAbsorbs", "UnitCanAttack" }) do
+        Override(name, function() end)
+    end
+    Override("unpack", unpack or table.unpack)
+    Override("GameTooltip", Support.FakeTooltip())   -- OnLeave asks whether it owns the tooltip
+    self.ns, self.UnitButton = ns, ns.UnitButton
+end
+
+function TestShieldRedraws:tearDown() Restore() end
+
+function TestShieldRedraws:Hover(unit)
+    self.button = WideButton(unit)
+    self.UnitButton.buttons[self.button] = true
+    self.UnitButton.OnEnter(self.button)
+end
+
+function TestShieldRedraws:Shield()
+    return Shows(self.button.predictionAbsorb)
+end
+
+-- AC1, S15: the target and focus frames keep their unit while the person behind it changes.
+function TestShieldRedraws:testTheShieldFollowsTheTargetOrFocusUnderTheMouse()
+    for unit, event in pairs({ target = "PLAYER_TARGET_CHANGED", focus = "PLAYER_FOCUS_CHANGED" }) do
+        self.you[unit] = true
+        self:Hover(unit)
+        lu.assertEquals(self:Shield(), 438, unit .. " on you")
+        self.you[unit] = false
+        self.ns[event](self.ns)
+        lu.assertEquals(self:Shield(), "hidden", unit .. " changed to party1")
+        self.you[unit] = true
+        self.ns[event](self.ns)
+        lu.assertEquals(self:Shield(), 438, unit .. " back on you")
+        self.UnitButton.OnLeave(self.button)
+    end
+end
+
+-- AC1, S18: the group puts another member behind your raid frame, and later you again.
+function TestShieldRedraws:testTheShieldFollowsARosterChangeUnderTheMouse()
+    self.you.raid3 = true
+    self:Hover("raid3")
+    lu.assertEquals(self:Shield(), 438, "your raid frame")
+    self.you.raid3 = false
+    self.ns:GROUP_ROSTER_UPDATE()
+    lu.assertEquals(self:Shield(), "hidden", "another member behind it")
+    self.you.raid3 = true
+    self.ns:GROUP_ROSTER_UPDATE()
+    lu.assertEquals(self:Shield(), 438, "you again")
+end
+
+-- AC2, S14 and S19: an aura change redraws through UpdateAuras, the redraw a
+-- UNIT_AURA batch runs; UpdateAllAuras is its way in from here.
+function TestShieldRedraws:testTheBarFollowsYourOwnShieldComingAndGoing()
+    self:Hover("player")
+    lu.assertEquals(self:Shield(), 438, "nothing up")
+    self.buffs, self.debuffs = { { name = "Power Word: Shield" } }, { { name = "Weakened Soul" } }
+    self.UnitButton:UpdateAllAuras()
+    lu.assertEquals(self:Shield(), 438, "a Priest's shield landed")
+    self.buffs = {}
+    self.UnitButton:UpdateAllAuras()
+    lu.assertEquals(self:Shield(), 438, "the shield faded, Weakened Soul still up")
+    self.buffs, self.debuffs = { { name = "Ice Barrier" } }, {}
+    self.UnitButton:UpdateAllAuras()
+    lu.assertEquals(self:Shield(), "hidden", "your own Ice Barrier landed")
+    self.buffs = {}
+    self.UnitButton:UpdateAllAuras()
+    lu.assertEquals(self:Shield(), 438, "your own Ice Barrier ended")
 end

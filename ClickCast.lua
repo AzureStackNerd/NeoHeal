@@ -618,7 +618,9 @@ end
 
 -- The heal prediction on a hovered frame (UnitButton.lua): how much a left click
 -- with the modifiers held now heals or shields that frame, as low and high numbers
--- (the same for a single amount) and "heal" or "absorb". Nil when that click
+-- (the same for a single amount), "heal" or "absorb", and the spell the click
+-- casts. The shield rules tell one shield from another by that spell, so the bar
+-- adds it here rather than the frames calling back for it. Nil when that click
 -- doesn't heal or shield the frame: another action, a spell cast on another unit,
 -- a spell not learned, or no readable amount.
 function ClickCast:GetLeftClickAmount()
@@ -628,10 +630,11 @@ function ClickCast:GetLeftClickAmount()
             or not IsPlayerSpell(binding.spellID) then
         return nil
     end
-    local low, high, kind = MatchAmount(self:GetSpellValue(binding))
+    local spellID = self:GetSpellValue(binding)
+    local low, high, kind = MatchAmount(spellID)
     if not low then return nil end
     low = ToNumber(low)
-    return low, high and ToNumber(high) or low, kind
+    return low, high and ToNumber(high) or low, kind, spellID
 end
 
 local HEAL_AMOUNT = "|cff33ff33%s|r"     -- green

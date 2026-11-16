@@ -51,7 +51,7 @@ NeoHeal is a small set of party and raid frames for healers on WoW: Forever. Bin
 
 Hover a frame to see your bindings, and hold Shift, Ctrl or Alt to see that modifier's bindings. Each heal or shield shows how much the rank you cast heals or absorbs, for example "Healing Wave 237-280" or "942 absorb".
 
-The frame under your mouse also shows how much your left click would heal: a lighter bar right after the incoming heals, which follows Shift, Ctrl and Alt too. A shield shows its absorb in blue, out of combat and only when the member can take one.
+The frame under your mouse also shows how much your left click would heal: a lighter bar right after the incoming heals, which follows Shift, Ctrl and Alt too. A shield shows its absorb in blue, out of combat and only where that shield would land: Power Word: Shield on any member, another shield only on your own frame.
 
 ## Frames
 
