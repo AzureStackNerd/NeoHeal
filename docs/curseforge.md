@@ -124,6 +124,10 @@ tag push does.
 | Game version | Only Forever (1.60.1); no Retail or Classic. The workflow reads the Interface from `NeoHeal.toc` (`## Interface: 16001`) and stops when CurseForge has no Forever version for it, so keep the two in line. |
 | Changelog | The `### <version>` section of this file, sent as Markdown |
 
+### 0.6.2
+
+- Fixed: a shield on your left click other than Power Word: Shield (such as Ice Barrier) showed its blue shield bar on every frame you hovered, and Weakened Soul or a Power Word: Shield on you hid it. It now shows only on a frame that is you, and not while that shield is already up on you. Power Word: Shield shows as before.
+
 ### 0.6.1
 
 - Fixed: a hover key's "Set key" button could keep taking your keys after it stopped reading "Press a key" (after a right-click on it, Set key on another hover key, a modifier button, an action choice or Reset), so W showed the "moves your character" warning instead of walking. A button now takes keys only while it reads "Press a key", and entering combat ends a wait.
