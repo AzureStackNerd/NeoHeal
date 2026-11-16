@@ -61,6 +61,7 @@ The frame under your mouse also shows how much your left click would heal: a lig
 - Up to two debuffs you can't dispel, such as boss debuffs, and a colored strip for debuffs you can dispel.
 - Priests and Druids: your own HoTs and shields with timers. Priests, Druids and Mages: out of combat, an icon shows who lacks your raid buff or has little of it left.
 - Healers at 20% mana or less show a blue "OOM".
+- The five-second rule: after a spell that costs mana, a bar on your own mana strip runs empty in 5 seconds, when your mana regeneration is back.
 - Aggro, your target, the member your enemy target is targeting, raid markers, role and leader icons, ready checks, resurrections and summons. Members out of range fade.
 
 ## Options
@@ -123,6 +124,10 @@ tag push does.
 | Release type | Release |
 | Game version | Only Forever (1.60.1); no Retail or Classic. The workflow reads the Interface from `NeoHeal.toc` (`## Interface: 16001`) and stops when CurseForge has no Forever version for it, so keep the two in line. |
 | Changelog | The `### <version>` section of this file, sent as Markdown |
+
+### 0.7.0
+
+- New: the five-second rule. After a spell that costs mana, a thin bar on your own frame's mana strip starts full and runs empty in 5 seconds; when it is gone, your mana regeneration is back. A new spell that costs mana fills it again. It shows on every frame that shows you, also the target or focus frame, and only while that frame shows a mana strip. "Show five-second rule" on the Layout page turns it off (on by default).
 
 ### 0.6.2
 
