@@ -12,13 +12,20 @@ complicated as Healbot").
 ## Backlog
 
 - Adapter: `github`.
-- Target: `AzureStackNerd/NeoHeal`. Stories carry the label `enhancement`, bugs `bug`; `in-game check` marks a check
-  only Remco can do in the game, `tests` a test gap. The GitHub project number 5 of owner `AzureStackNerd` ("NeoHeal")
-  holds the fields Status (Todo, In Progress, Done) and Priority (High, Medium, Low).
-- Hierarchy: flat; an issue has no sub-issues.
-- Started and done: started is the project Status "In Progress"; done is the issue closed as `completed`.
-- Who may write: Remco's own repository. The product owner files and comments issues, sets labels, Status and
-  Priority, and closes an issue once the done rule below holds.
+- Target: `AzureStackNerd/NeoHeal`, a public repository. Only bugs are issues there, labelled `bug`. Stories, in-game
+  checks (a check only Remco can do in the game, its title starting "Check") and test gaps are draft items in the
+  GitHub project number 5 of owner `AzureStackNerd` ("NeoHeal"), which is private (Remco, 2026-11-16: "only bugs on
+  the issues list"). The project holds the fields Status (Todo, In Progress, Done) and Priority (High, Medium, Low).
+  A draft item has a body but no labels and no comment thread: a later note is appended to its body.
+- Reading a draft item: `gh project item-list 5 --owner AzureStackNerd --limit 200 --format json` (the default limit
+  can leave items out); creating one: `gh project item-create 5 --owner AzureStackNerd --title ... --body ...`;
+  editing its body: `gh project item-edit --id <item id> --title ... --body ...`.
+- Hierarchy: flat; an item has no children.
+- Started and done: started is the project Status "In Progress"; done is a bug's issue closed as `completed`, or a
+  draft item's Status set to "Done".
+- Who may write: Remco's own repository. The product owner files and comments bugs, creates and edits draft items,
+  sets Status and Priority, and closes a bug or sets an item Done once the done rule below holds. Everything in the
+  repository, its issues and its comments is public: no tokens, machine or user names, or internal tool details.
 
 ## Commands, paths and rules
 
@@ -55,12 +62,12 @@ complicated as Healbot").
   "briefRules": [
     "Read the repository's CLAUDE.md first: its hard rules (combat lockdown, secret values, auras in combat, click types, event guards, new settings) bind every change.",
     "The tests run against a fake WoW API (spec/support.lua) under Lua 5.4; the game runs Lua 5.1. A test proves NeoHeal's logic, never that Forever's client accepts a call: say what is not checked in game.",
-    "A Forever API call or behaviour nobody can check here (there is no game client in these sessions) is worded as not checked in game in the code and docs, and listed in the gate file's Not done; the product owner adds it to an open issue labelled 'in-game check' for the release it ships in, or files one. Each check states what Remco does and what he should see, as a checkbox; the issues are split by the situation a check needs (solo, in or out of combat; in a party or raid), one issue per situation per release, so the solo checks don't wait for a group (Remco, 2026-11-15).",
+    "A Forever API call or behaviour nobody can check here (there is no game client in these sessions) is worded as not checked in game in the code and docs, and listed in the gate file's Not done; the product owner adds it to an open in-game check draft item on the project (never a public issue) for the release it ships in, or creates one. Only what the client does and no test can reach becomes a check (Remco, 2026-11-16: \"there were to much live checks\"). Each check states what Remco does and what he will see, as a checkbox; the items are split by the situation a check needs (solo, in or out of combat; in a party or raid), one item per situation per release, so the solo checks don't wait for a group (Remco, 2026-11-15).",
     "A new spec file is added to the list in spec/run.lua, or it never runs.",
     "The addon's .lua files are CRLF: keep each file's line endings as they are.",
     "Mutations run in a copy of the addon files, Locales/ and spec/ under the scratch path, restored by copying the saved file back, never in the repository and never with git.",
     "Never read ~/.claude/settings.json."
   ],
-  "done": "Committed and pushed to main, and its issue closed as completed with a comment naming the commit. A release (version, tag, ZIP, CurseForge) only on Remco's word."
+  "done": "Committed and pushed to main; a bug's issue closed as completed with a comment naming the commit, or a draft item's Status set to Done with the commit appended to its body. A release (version, tag, ZIP, CurseForge) only on Remco's word."
 }
 ```

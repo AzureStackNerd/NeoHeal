@@ -1,6 +1,6 @@
 -- MissingBuffs.lua: the grey icon in the third HoT slot shows on a member who
 -- lacks your class's raid buff, and also on one whose buff is running out: 10% or
--- less of its full duration left (issue #2; Remco chose 10% on 2026-11-15). A
+-- less of its full duration left (Remco chose 10% on 2026-11-15). A
 -- buff running out fires no event, so a button schedules its own re-check for the
 -- moment its first buff starts running out. These tests drive one fake button
 -- with fake auras, a clock they set themselves, and timers they fire by hand.
@@ -249,7 +249,7 @@ end
 
 -- "Cast missing buff" in a raid: the group version (Prayer of Fortitude) for a
 -- member of your party or raid, the single version for anyone else, such as the
--- target or focus frame on a player outside your group (issue #3). The group
+-- target or focus frame on a player outside your group. The group
 -- version needs the spell and its reagent, both present here.
 TestMissingBuffGroupVersion = {}
 

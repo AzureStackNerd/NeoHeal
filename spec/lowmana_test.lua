@@ -1,4 +1,4 @@
--- Low mana on healers' frames (issue #4; the story's acceptance criteria are
+-- Low mana on healers' frames (the story's acceptance criteria are
 -- quoted as AC1..AC4): the healer rule shared with "Resource bar: Healers only"
 -- and the "OOM" text (UnitButton.lua), its default (Core.lua), strings
 -- (Locales/enUS.lua), checkbox (Options.lua) and the fake healer in test mode

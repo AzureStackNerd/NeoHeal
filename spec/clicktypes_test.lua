@@ -166,7 +166,7 @@ function TestOpenUnitMenuSecretAnswer:testASecretAnswerGivesTheRaidMemberMenu()
     lu.assertEquals(Support.openedMenus[1][1], "RAID_PLAYER")
 end
 
--- The target and focus frames (issue #3): the unit token says nothing about who
+-- The target and focus frames: the unit token says nothing about who
 -- is behind it, so the menu is read from the unit, as Blizzard's TargetFrame_OpenMenu
 -- and FocusFrame_OpenMenu do (ClickCast.lua DetectedMenu). Each test's world has
 -- one answer true (or secret) and every other one false.

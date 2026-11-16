@@ -1,4 +1,4 @@
--- The target and focus frames (issue #3; the stories' acceptance criteria are
+-- The target and focus frames (the stories' acceptance criteria are
 -- quoted as AC1..AC5): TargetFocusFrames.lua on fake frames, and what the other
 -- files add for them: the reload on a target or focus change and the missing
 -- target border (UnitButton.lua), the defaults and events (Core.lua), creating

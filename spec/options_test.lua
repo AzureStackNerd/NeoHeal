@@ -471,7 +471,7 @@ function TestHoverKeyWait:testSwitchingPageOrClosingTheWindowEndsAWait()
     AssertTextMatchesKeyboard("reopened")
 end
 
--- Issue #15: the window title shows the version you run, read through the client
+-- The version in the title: the window title shows the version you run, read through the client
 -- from the TOC's "## Version" line. The expected version is read from the real
 -- NeoHeal.toc, so the test follows every release. Whether Forever's client has
 -- C_AddOns.GetAddOnMetadata is not checked here, only in game.
