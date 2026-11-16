@@ -125,6 +125,11 @@ tag push does.
 | Game version | Only Forever (1.60.1); no Retail or Classic. The workflow reads the Interface from `NeoHeal.toc` (`## Interface: 16001`) and stops when CurseForge has no Forever version for it, so keep the two in line. |
 | Changelog | The `### <version>` section of this file, sent as Markdown |
 
+### 0.7.1
+
+- Changed: the five-second bar no longer covers your mana. The resource bar is a bit higher (6 pixels instead of 4) and the five-second bar runs along its bottom, so your mana stays visible above it while it runs.
+- Changed: mana is a lighter blue that is easier to see on the thin bar, close to the game's own mana bar under your portrait. Rage, energy and focus keep the game's colours.
+
 ### 0.7.0
 
 - New: the five-second rule. After a spell that costs mana, a thin bar on your own frame's mana strip starts full and runs empty in 5 seconds; when it is gone, your mana regeneration is back. A new spell that costs mana fills it again. It shows on every frame that shows you, also the target or focus frame, and only while that frame shows a mana strip. "Show five-second rule" on the Layout page turns it off (on by default).
