@@ -11,7 +11,9 @@ complicated as Healbot").
 
 ## Backlog
 
-- Adapter: `github`.
+- Adapter: `github`, for bugs only. For stories, in-game checks and test gaps this repository overrides the adapter
+  with the draft items below: where the adapter says issue, read draft item; its sub-issue, label and comment
+  commands do not apply to them.
 - Target: `AzureStackNerd/NeoHeal`, a public repository. Only bugs are issues there, labelled `bug`. Stories, in-game
   checks (a check only Remco can do in the game, its title starting "Check") and test gaps are draft items in the
   GitHub project number 5 of owner `AzureStackNerd` ("NeoHeal"), which is private (Remco, 2026-11-16: "only bugs on
@@ -19,7 +21,11 @@ complicated as Healbot").
   A draft item has a body but no labels and no comment thread: a later note is appended to its body.
 - Reading a draft item: `gh project item-list 5 --owner AzureStackNerd --limit 200 --format json` (the default limit
   can leave items out); creating one: `gh project item-create 5 --owner AzureStackNerd --title ... --body ...`;
-  editing its body: `gh project item-edit --id <item id> --title ... --body ...`.
+  editing its title or body: `gh project item-edit --id <draft id> --title ... --body ...`, where the draft id is the
+  item's `content.id` (it starts with `DI_`; the item's own `id` is refused); setting Status or Priority:
+  `gh project item-edit --id <item id> --project-id <project id> --field-id <field id> --single-select-option-id
+  <option id>`, with the item's own `id` (it starts with `PVTI_`) and the ids from `gh project field-list`. Both seen
+  working on 2026-11-16.
 - Hierarchy: flat; an item has no children.
 - Started and done: started is the project Status "In Progress"; done is a bug's issue closed as `completed`, or a
   draft item's Status set to "Done".
