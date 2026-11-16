@@ -296,11 +296,24 @@ end
 -- Left click to set (Escape cancels), right click to clear.
 local MODIFIER_KEYS = { LSHIFT = true, RSHIFT = true, LCTRL = true, RCTRL = true, LALT = true, RALT = true }
 
+-- The button waiting for a key, or nil. One at a time, because the healer reads
+-- one "Press a key" (issue #6).
+local waitingCapture
+
 local function CreateKeyCaptureButton(row, slot)
     local button = CreateButton(row, "", 100, nil)
     button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 
+    -- The one place a wait ends. Any text but "Press a key" means the button must
+    -- not take keys, so writing the text and turning the keyboard off go together:
+    -- whichever caller redraws the row ends the wait (issue #6: a right click, Set
+    -- key on another button, a modifier button, an action, Reset, the page's
+    -- refresh, OnHide and combat start all reach this).
     function button:Refresh()
+        if waitingCapture == self then
+            waitingCapture = nil
+            self:EnableKeyboard(false)
+        end
         local key = ClickCast:GetHoverKey(slot)
         if key and ClickCast.MovesTheCharacter(key) then
             self:SetText(format(L.HOVER_KEY_MOVES_YOU, key))   -- saved earlier, or bound to movement since: not bound
@@ -308,19 +321,18 @@ local function CreateKeyCaptureButton(row, slot)
             self:SetText(key and format(L.HOVER_KEY, key) or L.SET_HOVER_KEY)
         end
     end
-    local function StopCapture()
-        button:EnableKeyboard(false)
-        button:Refresh()
-    end
 
     button:SetScript("OnClick", function(self, mouseButton)
         if InCombatLockdown() then return end
         if mouseButton == "RightButton" then
             ClickCast:SetHoverKey(slot, nil)
-            Options:RefreshBindingRows()
+            Options:RefreshBindingRows()   -- ends this button's wait too, through Refresh
             return
         end
-        self:SetText(L.PRESS_A_KEY)
+        -- One wait at a time: the button that was waiting shows its key again.
+        if waitingCapture then waitingCapture:Refresh() end
+        waitingCapture = self
+        self:SetText(L.PRESS_A_KEY)   -- the one text a waiting button may show; never followed by Refresh
         self:EnableKeyboard(true)
         self:SetPropagateKeyboardInput(false)   -- the key must not also trigger its normal binding
     end)
@@ -331,15 +343,15 @@ local function CreateKeyCaptureButton(row, slot)
             return
         end
         if key ~= "ESCAPE" then ClickCast:SetHoverKey(slot, key) end
-        StopCapture()
-        Options:RefreshBindingRows()   -- another slot may have lost this key
+        Options:RefreshBindingRows()   -- ends the wait, and another slot may have lost this key
     end)
     -- Setting OnKeyDown turns keyboard input on by itself, so until this the button
     -- took every key from the first time the window opened after a /reload: W showed
     -- the warning instead of walking (docs/forever-api.md, section 7). It listens only
     -- after a click on Set key.
     button:EnableKeyboard(false)
-    button:SetScript("OnHide", StopCapture)
+    -- Its page hiding or the window closing ends a wait the healer no longer sees.
+    button:SetScript("OnHide", function() button:Refresh() end)
     button:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:SetText(L.HOVER_KEY_TOOLTIP, nil, nil, nil, nil, true)
@@ -347,6 +359,12 @@ local function CreateKeyCaptureButton(row, slot)
     end)
     button:SetScript("OnLeave", GameTooltip_Hide)
     return button
+end
+
+-- End a wait from outside the button, for a moment that hides or interrupts it
+-- without any row redrawing: combat start (issue #6). Ends nothing when no button waits.
+function Options:EndKeyCapture()
+    if waitingCapture then waitingCapture:Refresh() end
 end
 
 -- One row per mouse button or hover key: [label] [action dropdown] [cast on dropdown] [also target]
@@ -498,7 +516,13 @@ local function TrackCombatAndModes(frame)
         notice:SetShown(enteringCombat)
         -- REGEN_DISABLED fires just before lockdown starts: the last moment the real
         -- frames can be shown again.
-        if enteringCombat then NeoHeal.Layout:SetTestMode(nil) end
+        if enteringCombat then
+            NeoHeal.Layout:SetTestMode(nil)
+            -- A wait that survives into combat would hold every key there, where losing
+            -- movement costs most (issue #6). Whether the client allows this call at that
+            -- moment is not checked in game.
+            Options:EndKeyCapture()
+        end
         NeoHeal.Layout:SetMoveMode(not enteringCombat and frame:IsShown())
     end)
 end

@@ -141,6 +141,15 @@ before this check, or bound to movement in the game's key bindings since) keeps
 its action but isn't bound: the tooltip leaves it out, and its button reads
 "W (moves you)". Unbind the movement and it works again.
 
+While a button reads "Press a key", your keys go to it instead of the game. A key
+sets it and Escape leaves it as it was. Anything that redraws the binding rows
+ends the wait: clearing the key, setting another hover key, picking a modifier or
+an action, resetting the bindings, or a change the game makes. So do switching
+page, closing the window and starting combat. The button then shows its key again
+and your keys do what they always do. What leaves the rows as they are keeps the
+wait reading "Press a key": a "cast on" choice, ticking "Also target", dragging or
+clicking the window, or opening and closing a menu without a choice.
+
 Actions:
 
 - **None**

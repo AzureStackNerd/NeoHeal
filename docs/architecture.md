@@ -33,7 +33,7 @@ Locales/enUS.lua → Core → Spells → Dispel → AuraContainer → Hots → M
 | **Layout** | Container, 8 group headers + main tank + pet header, arrangement, titles, move mode, size presets, test mode | `Create`, `Refresh`, `Arrange`, `FitToContent`, `SetTestMode`, `GetSize` |
 | **Preview** | Fake members for test mode, using `UnitButton.CreateVisuals` | `Show`, `Hide` |
 | **Blizzard** | Re-parents Blizzard group frames into a hidden frame | `ApplyHiding` |
-| **Options** | The options window; Layout page generated from `LAYOUT_SETTINGS` | `Toggle`, `RefreshLayoutPage`, `RefreshBindingRows`, `RefreshClickCastingPage` |
+| **Options** | The options window; Layout page generated from `LAYOUT_SETTINGS` | `Toggle`, `RefreshLayoutPage`, `RefreshBindingRows`, `RefreshClickCastingPage`, `EndKeyCapture` |
 
 ## Start-up (`PLAYER_LOGIN`)
 
@@ -175,7 +175,11 @@ charDB.bindings["shift-2"] = { action="spell", spellID=139, highestRank=true, ta
   one (set before that check, or bound to movement since) isn't bound: the
   tooltip leaves it out and its options button reads "W (moves you)".
   `UPDATE_BINDINGS` re-checks after a key binding change. Why:
-  [forever-api.md](forever-api.md) section 6.
+  [forever-api.md](forever-api.md) section 6. The key capture itself is one
+  wait at a time, `waitingCapture` in `Options.lua`: the button's `Refresh`
+  writes its text and turns its keyboard off together, so any redraw of the
+  rows and the window's combat handler end a wait (`EndKeyCapture`). Why:
+  [forever-api.md](forever-api.md) section 7.
 - **Target and Open unit menu** keep the game's types (`target`, `togglemenu`)
   only on plain left and right click. Everywhere else Blizzard's click bindings
   would drop those types (see [forever-api.md](forever-api.md)), so the slot gets
