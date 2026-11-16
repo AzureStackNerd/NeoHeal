@@ -250,6 +250,20 @@ end
 -- Decorations: what each fake member draws
 ---------------------------------------------------------------------------
 
+-- The colour fix of 2026-11-16: test mode draws a mana strip in the same lighter
+-- blue as the real frames (0, 0.45, 1.0), a warlock pet's too; rage and a hunter
+-- pet's focus keep Blizzard's colours. The game's colours are faked as one each.
+function TestPreview:testManaStripsAreTheLighterBlue()
+    Override("PowerBarColor", { MANA = { r = 0, g = 0, b = 1 }, RAGE = { r = 1, g = 0, b = 0 },
+                                ENERGY = { r = 1, g = 1, b = 0 }, FOCUS = { r = 1, g = 0.5, b = 0.25 } })
+    self.ns.db.layout.showPets = true
+    self.Preview:Show(40)
+    lu.assertEquals(self:Frame("Seraphine").power.barColor, { 0, 0.45, 1.0 }, "a fake priest's mana isn't the lighter blue")
+    lu.assertEquals(self:Frame("Zhaazar").power.barColor, { 0, 0.45, 1.0 }, "a fake warlock pet's mana isn't the lighter blue")
+    lu.assertEquals(self:Frame("Brakka").power.barColor, { 1, 0, 0 }, "a fake warrior's rage lost Blizzard's colour")
+    lu.assertEquals(self:Frame("Fang").power.barColor, { 1, 0.5, 0.25 }, "a fake hunter pet's focus lost Blizzard's colour")
+end
+
 -- "Health bar color: Class": each member in its class colour, pets green.
 function TestPreview:testClassColorsAndGreenPets()
     self.ns.db.layout.showPets = true

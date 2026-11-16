@@ -168,3 +168,65 @@ the same mutation as before, at its current line. These rows replace the earlier
 | R12 | `Core.lua` | `showFiveSecond = true,` | `showFiveSecond = false,` | `TestFiveSecondCore.testOnByDefault` | `fivesecond_test.lua:487: Show five-second rule isn't on by default expected: true, actual: false` |
 
 Mutation runs for the re-proof: 12 of 14.
+
+## Fix: bar placement
+
+The rule (point 8 of the refinement): the resource strip is 6 pixels high on every frame, the five-second bar sits
+on its bottom 2 pixels, and the health bar's height counts the 6-pixel strip. The tests are derived from that rule,
+not from what the code prints; before the Developer's change all three failed on the old source on their own
+assertions (`:351`, `:358`, `:371`, the same lines as below).
+
+Changed tests, all in `spec/fivesecond_test.lua`: `testTheBarSitsOnTheStrip` now pins `BOTTOMLEFT`/`BOTTOMRIGHT`
+anchors with offset 0 (it pinned the top edge); `testTheStripIsSixPixels` and
+`testTheDebuffRoomCountsTheSixPixelStrip` are new. No other test pinned the 4-pixel strip or the bar's place.
+
+| Site (file:line) | Test | Seen red how | Proved on |
+| --- | --- | --- | --- |
+| `UnitButton.lua:20` `POWER_BAR_HEIGHT = 6` | `TestFiveSecond.testTheStripIsSixPixels`, `TestFiveSecond.testTheDebuffRoomCountsTheSixPixelStrip` | P1 | `390e4eec133dd614ee6370f08a75d38e5957a79b` |
+| `UnitButton.lua:23` `FIVE_SECOND_HEIGHT` comment | none: comment only, no mutation | n/a | n/a |
+| `UnitButton.lua:24` `FIVE_SECOND_COLOR` comment | none: comment only, no mutation | n/a | n/a |
+| `UnitButton.lua:1163-1171` the bar's comment and its anchors (`:1169-1170`) | `TestFiveSecond.testTheBarSitsOnTheStrip` | P2 | `390e4eec133dd614ee6370f08a75d38e5957a79b` |
+
+Mutations, each in a fresh copy of the working tree, restored by copying the saved file back (the restored file's
+hash equals the working tree's), run with `lua spec/run.lua --pattern TestFiveSecond`:
+
+| Id | Site | Line | Mutated to | Failing test | Failure line |
+| --- | --- | --- | --- | --- | --- |
+| P1 | `UnitButton.lua:20` | `local POWER_BAR_HEIGHT = 6` | `local POWER_BAR_HEIGHT = 4` | `testTheDebuffRoomCountsTheSixPixelStrip`, `testTheStripIsSixPixels` | `fivesecond_test.lua:371: the debuff room doesn't count a 6-pixel strip expected: 12, actual: 14`; `fivesecond_test.lua:358: the resource strip isn't 6 pixels high expected: 6, actual: 4` |
+| P2 | `UnitButton.lua:1169-1170` | `fiveSecond:SetPoint("BOTTOMLEFT", power, "BOTTOMLEFT", 0, 0)` and the `BOTTOMRIGHT` line | `TOPLEFT`/`TOPLEFT` and `TOPRIGHT`/`TOPRIGHT` | `testTheBarSitsOnTheStrip` | `fivesecond_test.lua:351: the bar isn't on the strip's bottom edge expected: {BOTTOMLEFT={"BOTTOMLEFT", 0, 0}, BOTTOMRIGHT={"BOTTOMRIGHT", 0, 0}} actual: {TOPLEFT={"TOPLEFT", 0, 0}, TOPRIGHT={"TOPRIGHT", 0, 0}}` |
+
+Mutation runs: 2 of 4. Not checked here: how the 6-pixel strip and the bar look in game (Remco saw this change on an
+installed copy).
+
+### The mana colour (added to the fix)
+
+The rule (Remco, 2026-11-16): a mana strip is RGB 0, 115, 255 (`0, 0.45, 1.0`) on the real frames and in test mode,
+a warlock pet's too; rage, energy and focus keep Blizzard's colours. Both tests fake the game's colours as one
+distinct colour per type, so a strip left in the game's colour can't pass. Both failed on the source before the
+Developer's change (`fivesecond_test.lua:381` and `preview_test.lua:261`, actual `{0, 0, 1}`).
+
+| Site (file:line) | Test | Seen red how | Proved on |
+| --- | --- | --- | --- |
+| `UnitButton.lua:20-23` `MANA_BAR_COLOR` | `TestFiveSecond.testAManaStripIsTheLighterBlue`, `TestPreview.testManaStripsAreTheLighterBlue` | C1 | `221ae598e7be66ed12b9c0f6a1587ece56d50e63` |
+| `UnitButton.lua:572-579` `PowerColor`, mana | both | C2 | `221ae598e7be66ed12b9c0f6a1587ece56d50e63` |
+| `UnitButton.lua:572-579` `PowerColor`, other types keep Blizzard's | both (the rage rows) | C6 | `221ae598e7be66ed12b9c0f6a1587ece56d50e63` |
+| `UnitButton.lua:590` `UpdatePower` | `TestFiveSecond.testAManaStripIsTheLighterBlue` | C3 | `221ae598e7be66ed12b9c0f6a1587ece56d50e63` |
+| `Preview.lua:207` fake members | `TestPreview.testManaStripsAreTheLighterBlue` | C4 | `bb916ad151b52d5bb8e2bece4e584851c349db93` |
+| `Preview.lua:264` fake pets | `TestPreview.testManaStripsAreTheLighterBlue` | C5 | `bb916ad151b52d5bb8e2bece4e584851c349db93` |
+
+| Id | Line | Mutated to | Failure line |
+| --- | --- | --- | --- |
+| C1 | `local MANA_BAR_COLOR = { r = 0, g = 0.45, b = 1.0 }` | `g = 0` | `fivesecond_test.lua:381: a mana strip isn't the lighter blue expected: {0, 0.45, 1.0} actual: {0, 0, 1.0}`; `preview_test.lua:261: a fake priest's mana isn't the lighter blue` (same values) |
+| C2 | `if token == "MANA" then return MANA_BAR_COLOR end` | commented out | `fivesecond_test.lua:381` and `preview_test.lua:261`, actual `{0, 0, 1}` |
+| C3 | `local color = PowerColor(powerToken)` | the old `(powerToken and PowerBarColor[powerToken]) or FALLBACK_POWER_COLOR` | `fivesecond_test.lua:381: a mana strip isn't the lighter blue expected: {0, 0.45, 1.0} actual: {0, 0, 1}` |
+| C4 | `local powerColor = NeoHeal.UnitButton.PowerColor(POWER_BY_CLASS[class] or "MANA")` | the old `PowerBarColor[POWER_BY_CLASS[class] or "MANA"]` | `preview_test.lua:261: a fake priest's mana isn't the lighter blue expected: {0, 0.45, 1.0} actual: {0, 0, 1}` |
+| C5 | `local powerColor = NeoHeal.UnitButton.PowerColor(data.power)` | the old `PowerBarColor[data.power]` | `preview_test.lua:262: a fake warlock pet's mana isn't the lighter blue expected: {0, 0.45, 1.0} actual: {0, 0, 1}` |
+| C6 | `if token == "MANA" then return MANA_BAR_COLOR end` | `if true then ...` | `fivesecond_test.lua:383: a rage strip lost Blizzard's colour expected: {1, 0, 0} actual: {0, 0.45, 1.0}`; `preview_test.lua:263: a fake warrior's rage lost Blizzard's colour` (same values) |
+
+The focus assertion (`preview_test.lua:264`, the hunter pet) was not reached in C6: the rage assertion before it
+fails first, so only the rage rows are proved for "other types keep Blizzard's".
+
+Mutation runs: 6 of 12. The first 6 allowed runs were spent on a substitution that never changed a file (the tests
+ran green on unmutated code); they prove nothing and are not counted above. The rerun checked each substitution
+(exactly one whole-line match, the new line present, the file changed) before running a test. Not checked here: how
+the colour looks in game (Remco saw it on an installed copy).

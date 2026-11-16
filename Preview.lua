@@ -204,7 +204,7 @@ end
 local function Decorate(frame, member)
     local class = GetClass(member)
     local healthFraction = 0.25 + ((member * 37) % 75) / 100
-    local powerColor = PowerBarColor[POWER_BY_CLASS[class] or "MANA"]
+    local powerColor = NeoHeal.UnitButton.PowerColor(POWER_BY_CLASS[class] or "MANA")
 
     NeoHeal.UnitButton.ApplyStyle(frame)
     NeoHeal.UnitButton.LayoutBars(frame, NeoHeal.UnitButton.ShowsPowerBar(FAKE_ROLES[class] or "DAMAGER", class))
@@ -261,7 +261,7 @@ local PET_COLOR = { r = 0.2, g = 0.8, b = 0.2 }   -- as on the real frames
 local function DecoratePet(frame, pet)
     local data = FAKE_PETS[pet]
     local healthFraction = 0.4 + ((pet * 29) % 60) / 100
-    local powerColor = PowerBarColor[data.power]
+    local powerColor = NeoHeal.UnitButton.PowerColor(data.power)
 
     NeoHeal.UnitButton.ApplyStyle(frame)
     NeoHeal.UnitButton.LayoutBars(frame, NeoHeal.UnitButton.ShowsPowerBar(nil, nil))   -- pets: no role or class

@@ -17,11 +17,15 @@ local RANGE_CHECK_INTERVAL = 1   -- seconds; backup for UNIT_IN_RANGE_UPDATE
 local WHITE_TEXTURE = "Interface\\Buttons\\WHITE8X8"
 local PET_BAR_COLOR = { r = 0.2, g = 0.8, b = 0.2 }
 local FALLBACK_POWER_COLOR = { r = 0.0, g = 0.5, b = 1.0 }   -- mana blue
-local POWER_BAR_HEIGHT = 4
+-- Blizzard's mana blue is too dark on the 6 px strip. This one (RGB 0, 115, 255)
+-- shows about like WoW's own portrait mana bar through the bar texture. Chosen on an
+-- installed copy in game (Remco, 2026-11-16).
+local MANA_BAR_COLOR = { r = 0, g = 0.45, b = 1.0 }
+local POWER_BAR_HEIGHT = 6       -- pixels; 4 of them stay visible above the five-second bar on its bottom edge
 local FIVE_SECOND_SECONDS = 5    -- how long your mana regeneration stays off after a cast
 local FIVE_SECOND_TICK = 0.1     -- seconds; how often the five-second bar moves
-local FIVE_SECOND_HEIGHT = 2     -- pixels on the strip's top edge, so the mana below stays visible
-local FIVE_SECOND_COLOR = { 0.55, 0.85, 1, 0.9 }   -- pale blue, brighter than the mana under it
+local FIVE_SECOND_HEIGHT = 2     -- pixels on the strip's bottom edge, so the mana above stays visible
+local FIVE_SECOND_COLOR = { 0.55, 0.85, 1, 0.9 }   -- pale blue, brighter than the mana above it
 local AGGRO_THREAT_STATUS = 2    -- UnitThreatSituation: 2 and 3 mean "has aggro"
 local AURA_BATCH_DELAY = 0.1     -- seconds; UNIT_AURA bursts on one unit cost one scan
 
@@ -565,8 +569,16 @@ local function ApplyStyle(button)
 end
 UnitButton.ApplyStyle = ApplyStyle   -- the preview uses it too
 
--- Mana, rage, energy, ... in the game's own colours. The type can change, e.g.
--- when a druid shifts into bear form.
+-- The colour of a resource strip: the lighter mana blue above for mana, Blizzard's
+-- own for every other type, and the fallback when the type is hidden. One function,
+-- because the frames and the test mode must not drift apart.
+local function PowerColor(token)
+    if token == "MANA" then return MANA_BAR_COLOR end
+    return (token and PowerBarColor[token]) or FALLBACK_POWER_COLOR
+end
+UnitButton.PowerColor = PowerColor   -- the preview uses it too
+
+-- Mana, rage, energy, ... The type can change, e.g. when a druid shifts into bear form.
 local function UpdatePower(button)
     local unit = button.unit
     UpdateLowMana(button)   -- independent of the resource-bar setting
@@ -575,7 +587,7 @@ local function UpdatePower(button)
 
     local powerType, powerToken = UnitPowerType(unit)
     if IsSecret(powerType) then powerType, powerToken = nil, nil end
-    local color = (powerToken and PowerBarColor[powerToken]) or FALLBACK_POWER_COLOR
+    local color = PowerColor(powerToken)
     button.power:SetStatusBarColor(color.r, color.g, color.b)
 
     if IsDeadOrOffline(unit) then
@@ -1161,12 +1173,13 @@ function UnitButton.CreateVisuals(frame)
     frame.power = power
 
     -- The five-second bar (UpdateFiveSecond): a child of the strip, so hiding the
-    -- strip hides it too, and 2 pixels on its top edge leave the mana below visible.
+    -- strip hides it too, and 2 pixels on its bottom edge leave the mana above
+    -- visible while it runs.
     -- It takes its texture and colour from ApplyStyle, like every other bar.
     local fiveSecond = CreateFrame("StatusBar", nil, power)
     fiveSecond:SetHeight(FIVE_SECOND_HEIGHT)
-    fiveSecond:SetPoint("TOPLEFT", power, "TOPLEFT", 0, 0)
-    fiveSecond:SetPoint("TOPRIGHT", power, "TOPRIGHT", 0, 0)
+    fiveSecond:SetPoint("BOTTOMLEFT", power, "BOTTOMLEFT", 0, 0)
+    fiveSecond:SetPoint("BOTTOMRIGHT", power, "BOTTOMRIGHT", 0, 0)
     fiveSecond:SetMinMaxValues(0, 1)
     fiveSecond:Hide()
     frame.fiveSecond = fiveSecond

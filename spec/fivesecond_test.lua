@@ -331,8 +331,9 @@ function TestFiveSecond:testTheOptionTurnsTheBarOff()
     AssertBar(self.own, 1, "on again, the next spell starts no bar")
 end
 
--- AC5, S25, S28: the bar sits on the strip (its child), 2 pixels on its top edge
--- and as wide, hidden on a new frame; hiding the strip hides it.
+-- AC5, S25, S28, and the placement fix of 2026-11-16: the bar sits on the strip
+-- (its child), 2 pixels on its bottom edge and as wide, so the 4 pixels of mana
+-- above it stay visible; hidden on a new frame; hiding the strip hides it.
 function TestFiveSecond:testTheBarSitsOnTheStrip()
     local button = Support.RealButton(self.ns)
     local bar = button.fiveSecond
@@ -345,9 +346,41 @@ function TestFiveSecond:testTheBarSitsOnTheStrip()
     local anchors = {}
     for _, point in ipairs(bar.points) do
         lu.assertIs(point[2], button.power, "anchored to something else than the strip")
-        anchors[point[1]] = point[3]
+        anchors[point[1]] = { point[3], point[4], point[5] }
     end
-    lu.assertEquals(anchors, { TOPLEFT = "TOPLEFT", TOPRIGHT = "TOPRIGHT" })
+    lu.assertEquals(anchors, { BOTTOMLEFT = { "BOTTOMLEFT", 0, 0 }, BOTTOMRIGHT = { "BOTTOMRIGHT", 0, 0 } },
+        "the bar isn't on the strip's bottom edge")
+end
+
+-- The placement fix of 2026-11-16: the resource strip is 6 pixels high on every
+-- frame, so the 2-pixel bar on it leaves 4 pixels of mana visible.
+function TestFiveSecond:testTheStripIsSixPixels()
+    lu.assertEquals(Support.RealButton(self.ns).power.height, 6, "the resource strip isn't 6 pixels high")
+    lu.assertEquals(self.own.power.height, 6, "your own frame's strip isn't 6 pixels high")
+end
+
+-- The placement fix of 2026-11-16: the health bar is what the strip leaves, so the
+-- room below the name the raid debuffs get counts the 6-pixel strip and its
+-- 1-pixel gap. A 36-pixel frame in the flat style (1 pixel inset on each side):
+-- 36 - 2 - 6 - 1 = 27 of health, less the 14 above the debuffs and 1 below them
+-- leaves 12, smaller than 1.5 times the HoT icon; without a strip, 19.
+function TestFiveSecond:testTheDebuffRoomCountsTheSixPixelStrip()
+    self.ns.Layout = { GetSize = function() return { buttonHeight = 36 } end }
+    self.ns.Hots.GetIconSize = function() return 20 end
+    self.ns.db.layout.frameStyle = "forever"
+    lu.assertEquals(self.UnitButton.GetRaidDebuffSize(), 12, "the debuff room doesn't count a 6-pixel strip")
+    self.ns.db.layout.powerBar = "none"
+    lu.assertEquals(self.UnitButton.GetRaidDebuffSize(), 19, "without a strip the health bar has the room")
+end
+
+-- The colour fix of 2026-11-16: a mana strip is RGB 0, 115, 255 (0, 0.45, 1.0),
+-- lighter than Blizzard's mana blue, which is too dark on a thin strip; a rage
+-- strip keeps Blizzard's colour. The game's colours are faked as pure blue and red.
+function TestFiveSecond:testAManaStripIsTheLighterBlue()
+    Override("PowerBarColor", { MANA = { r = 0, g = 0, b = 1 }, RAGE = { r = 1, g = 0, b = 0 } })
+    lu.assertEquals(self:Button("party1").power.barColor, { 0, 0.45, 1.0 }, "a mana strip isn't the lighter blue")
+    self.power.party2 = 1
+    lu.assertEquals(self:Button("party2").power.barColor, { 1, 0, 0 }, "a rage strip lost Blizzard's colour")
 end
 
 -- AC1: the bar takes the frame style's texture, like the other bars, and a colour

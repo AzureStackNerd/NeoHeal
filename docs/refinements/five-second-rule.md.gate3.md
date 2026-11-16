@@ -101,3 +101,69 @@ client's generated docs contradict.
   than the rule unless the clock itself stops and resumes with it (S34).
 - Whether mana regeneration really stops for 5 seconds after a cast, and for the whole of a channel longer than 5
   seconds: community sources, not checked in game.
+
+## Fix: bar placement
+
+The 6 px strip and the bar on its bottom 2 px (open point 8, Remco 2026-11-16). The change Remco kept on an
+installed copy, plus the comments and docs that stated the old place.
+
+| Site | What it changes | AC / rows | Docs that describe it (grep) |
+| --- | --- | --- | --- |
+| UnitButton.lua:20 | `POWER_BAR_HEIGHT` 4 → 6, with a comment saying 4 px stay visible above the bar. Read by `power:SetHeight` (:1159) on every frame, so party, raid, target, focus and test mode are all 6 px with no second site | AC1, AC5; S1, S24, S25, S35 | features.md ("mana strip" 2, "6 px" 1); five-second-rule.md ("6 px" 2) |
+| UnitButton.lua:23 | the `FIVE_SECOND_HEIGHT` comment: the strip's top edge → its bottom edge, mana above stays visible; the value stays 2 | AC1; S1 | features.md ("bottom 2 px" 1) |
+| UnitButton.lua:24 | the `FIVE_SECOND_COLOR` comment: "brighter than the mana under it" → "above it" | AC1 | — |
+| UnitButton.lua:1163-1171 | the comment on `frame.fiveSecond` and its two anchors: `TOPLEFT`/`TOPRIGHT` of the strip → `BOTTOMLEFT`/`BOTTOMRIGHT`, offset 0 | AC1, AC3, AC5; S1, S25, S35 | features.md ("bottom edge" 1, "bottom 2 px" 1); five-second-rule.md (the How line) |
+| docs/features.md | the "Bottom strip" row ("above it" → "on its bottom edge"), and the five-second rule paragraph ("sits on the top of the mana strip" → "on the bottom 2 px", plus the 6 px strip and the 4 px of mana above it) | AC1; S1 | (itself) |
+| docs/refinements/five-second-rule.md | the "How" line: the bar is 2 pixels on the strip's *bottom* edge, and the strip is 6 px since open point 8 | AC1 | (itself) |
+
+Grep counts, working tree vs HEAD (`git show HEAD:<file> | grep -c -F`):
+
+- docs/features.md: "top of the mana strip" 1 → 0, "above it, while" 1 → 0, "bottom edge" 0 → 1, "6 px" 0 → 1.
+- docs/refinements/five-second-rule.md: "top edge" 1 → 0 (the How line), "6 px" 0 → 2 (open point 8 + the How line).
+- Left as they are: the refinement's "Notes for gate 2" still says "a 4-pixel strip" (a record of the gate-2 question,
+  true of the code then), docs/curseforge.md and docs/saved-variables.md name the bar "on the mana strip" only, with
+  no place or height, and docs/architecture.md names neither; "Top edge" in features.md is the aggro line, not this.
+
+Check on what else reads the strip's height: `grep -rn POWER_BAR_HEIGHT` gives three sites only, :20, :685 and :1159;
+`Layout.lua` has no strip height, and `Preview.lua` and `TargetFocusFrames.lua` both build their frames through
+`UnitButton.CreateVisuals`, so they get the 6 px from the same constant. `GetRaidDebuffSize` (:685) subtracts the
+constant, so the room below the name follows on its own.
+
+- Done: the four source sites and the two docs.
+- Verified with `lua spec/run.lua`: `Ran 337 tests in 3.553 seconds, 337 successes, 0 failures`, the TestWriter's
+  `testTheBarSitsOnTheStrip`, `testTheStripIsSixPixels` and `testTheDebuffRoomCountsTheSixPixelStrip` included.
+  `check-gate.mjs`: `PASS: all tests`; `check-refinement.mjs docs/refinements/five-second-rule.md`: `PASS`.
+- Line endings after every edit: `UnitButton.lua` CR=1524 LF=1524, `docs/features.md` CR=320 LF=320 (both CRLF);
+  `docs/refinements/five-second-rule.md` CR=0 LF=217 (LF).
+- Not done: nothing on this fix; the TestWriter's red proof per site is in `.gate3-tests.md`.
+- Left for the Architect: AC1's wording. Open point 8 records Remco's new text ("a thin bar along the bottom of the
+  mana strip ..., which is 6 px so 4 px of mana stay visible"), and the AC still reads "a thin bar on the mana strip",
+  which stays true but no longer names the place. The AC table is the Architect's file, not mine.
+
+### The lighter mana blue
+
+Remco's second kept change on the same installed copy: Blizzard's `PowerBarColor["MANA"]` is too dark on a now-thin
+strip, so mana is drawn in RGB 0, 115, 255 (Remco, 2026-11-16). Rage, energy and focus keep the game's colours, and a
+hidden power type keeps the fallback.
+
+| Site | What it changes | AC / rows | Docs that describe it (grep) |
+| --- | --- | --- | --- |
+| UnitButton.lua:20-23 | `MANA_BAR_COLOR = { r = 0, g = 0.45, b = 1.0 }`, defined once, with the comment saying why (Blizzard's blue is too dark on a 6 px strip; this one shows like the mana bar beside the portrait) | AC1; S1, S14 | features.md ("Bottom strip" row) |
+| UnitButton.lua:572-579 | `PowerColor(token)`, exported for the preview: mana takes the colour above, every other token `PowerBarColor[token]`, a hidden token the fallback — one rule for the frames and test mode | AC1; S1, S11, S14 | features.md |
+| UnitButton.lua:590 | `UpdatePower` asks that function instead of reading `PowerBarColor` itself, so a real frame and a fake one can't disagree | AC1; S1, S11, S14 | features.md, architecture.md (`UpdatePower` named, colour not) |
+| Preview.lua:207 | the fake members take their strip colour from the same function | AC8; S35, S36 | features.md (test mode) |
+| Preview.lua:264 | the fake pets too, so a warlock pet's mana is the same blue and a hunter pet's focus stays Blizzard's | AC8; S36 | features.md (test mode) |
+| docs/features.md | the "Bottom strip" row: mana is a lighter blue than Blizzard's, which is too dark on a thin strip; rage, energy and focus keep the game's colours | AC1 | (itself) |
+
+Grep counts: `PowerBarColor` outside `spec/`: 3 at HEAD (UnitButton.lua 1, Preview.lua 2) → 1 now, the single lookup
+in `PowerColor`. `MANA_BAR_COLOR`: defined once at UnitButton.lua:23, read once at :576.
+
+- Done: the four source sites and the doc.
+- Verified with `lua spec/run.lua`: `Ran 339 tests in 4.347 seconds, 339 successes, 0 failures`, with the TestWriter's
+  `testAManaStripIsTheLighterBlue` and `testManaStripsAreTheLighterBlue` in the run.
+- Line endings after every edit: `UnitButton.lua` CR=1536 LF=1536, `Preview.lua` CR=360 LF=360, `docs/features.md`
+  CR=320 LF=320 (all CRLF).
+- Not done: whether the lighter blue reads right through Forever's own bar texture in game — Remco chose it on an
+  installed copy of exactly this change, so the choice is checked in game and the rest is not (a druid's form strip,
+  rage, energy, focus, pets).
+- The TestWriter's red proof for these sites goes in `.gate3-tests.md` under the same heading.
