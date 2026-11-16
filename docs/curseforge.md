@@ -124,6 +124,10 @@ tag push does.
 | Game version | Only Forever (1.60.1); no Retail or Classic. The workflow reads the Interface from `NeoHeal.toc` (`## Interface: 16001`) and stops when CurseForge has no Forever version for it, so keep the two in line. |
 | Changelog | The `### <version>` section of this file, sent as Markdown |
 
+### 0.6.1
+
+- Fixed: a hover key's "Set key" button could keep taking your keys after it stopped reading "Press a key" (after a right-click on it, Set key on another hover key, a modifier button, an action choice or Reset), so W showed the "moves your character" warning instead of walking. A button now takes keys only while it reads "Press a key", and entering combat ends a wait.
+
 ### 0.6.0
 
 - New: frames for your target and your focus ("Show target frame" and "Show focus frame" on the Layout page, off by default). Heal someone you have targeted or focused with your click casting, also when they are not in your group. They show above the NeoHeal frames while that unit is friendly.
