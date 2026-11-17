@@ -2,7 +2,33 @@
 
 NeoHeal is a small click-cast raid frame addon for party and raid healing on
 **WoW: Forever** (the Classic-era game running on the retail 12.x client API).
-Interface version `16001`, addon version `0.6.0`.
+Interface version `16001`, addon version `0.8.0`.
+
+## What it does
+
+Everything below is described in full, with every option, in [features.md](features.md).
+
+- **Click casting:** five mouse buttons and three hover keys, each with no modifier, Shift, Ctrl or Alt.
+  Cast any spell at its highest rank, the rank below it ("Highest rank -1") or a fixed rank, on the
+  unit, its target or its target's target, and optionally target them in the same click. Target, open
+  the unit menu, or cast the raid buff a member is missing. A spell click on a dead member casts your
+  resurrection.
+- **See what a click does:** the tooltip lists your bindings, per modifier, with how much each heal heals
+  or each shield absorbs. The frame under your mouse shows how much your left click would heal (heal
+  prediction), and a shield's absorb.
+- **Frames:** one column per group, separate sizes for party and raid, optional main tanks, pets, and a
+  target and a focus frame with the same click casting. Class or health colours, incoming heals,
+  shields, a low-health tint, health as a percentage or as health missing.
+- **What a frame shows:** debuffs you can't dispel and a strip for those you can; your own HoTs and
+  shields with timers; who lacks your raid buff; aggro, your target, who your enemy targets, raid
+  markers, role and leader icons, ready checks, resurrections and summons; range fading.
+- **Mana:** a blue "OOM" on healers at 20% mana or less, and the five-second rule: after a spell that
+  costs mana, a bar on your own mana strip runs empty in 5 seconds, when your regeneration is back.
+- **The cancel cue:** while you cast a heal on a member from their frame, a band at the bottom of that
+  frame shows gold while the heal is needed and red once they are back above 90%, so you can cancel
+  and keep the mana.
+- **Options:** `/neoheal` or the addon compartment icon; test mode shows a fake group of 5, 10, 25 or
+  40 players.
 
 | Document | For whom | What's in it |
 | --- | --- | --- |

@@ -62,6 +62,7 @@ The frame under your mouse also shows how much your left click would heal: a lig
 - Priests and Druids: your own HoTs and shields with timers. Priests, Druids and Mages: out of combat, an icon shows who lacks your raid buff or has little of it left.
 - Healers at 20% mana or less show a blue "OOM".
 - The five-second rule: after a spell that costs mana, a bar on your own mana strip runs empty in 5 seconds, when your mana regeneration is back.
+- The cancel cue: while you cast a heal on a member from their frame, a band at the bottom of that frame shows gold while the heal is needed and red once they are back above 90%, so you can cancel and keep the mana.
 - Aggro, your target, the member your enemy target is targeting, raid markers, role and leader icons, ready checks, resurrections and summons. Members out of range fade.
 
 ## Options
@@ -133,6 +134,11 @@ tag push does.
 | Release type | Release |
 | Game version | Only Forever (1.60.1); no Retail or Classic. The workflow reads the Interface from `NeoHeal.toc` (`## Interface: 16001`) and stops when CurseForge has no Forever version for it, so keep the two in line. |
 | Changelog | The `### <version>` section of this file, sent as Markdown |
+
+### 0.8.0
+
+- New: the cancel cue. While you cast a heal on a member by clicking their NeoHeal frame (or with a hover key), a thin band along the bottom of that frame's health bar shows gold while the heal is still needed, and turns red once the member is back above 90% health: cancel the cast and keep the mana, without restarting the five-second rule. It shows for heals on one member with a cast time, not for a res, a group heal or a cast from your action bar. "Show cancel cue" on the Layout page turns it off (on by default), and test mode shows both colours.
+- Known limit: a click the game refuses (out of range, say), followed within half a second by the same heal cast from your action bar on someone else (any spell, if the game hides that cast's details), shows the band on the frame you clicked until that cast ends.
 
 ### 0.7.1
 
