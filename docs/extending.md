@@ -159,5 +159,7 @@ In game:
   and clicking it opens and closes the options window.
 - Five-second bar, solo and in a raid, in and out of combat: cast a spell that
   costs mana; a thin bar along the bottom of your own frame's mana strip starts
-  full and runs empty in 5 seconds, and a new cast fills it again. With "Show
-  five-second rule" (Layout) off, no bar.
+  full and runs empty in 5 seconds, and a new cast fills it again. A cast made
+  free (Clearcasting, Inner Focus) starts it too. Target yourself and set
+  yourself as focus with those frames on: the target and focus frames show the
+  same bar. With "Show five-second rule" (Layout) off, no bar.
