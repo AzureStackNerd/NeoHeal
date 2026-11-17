@@ -136,9 +136,10 @@ member's GUID (a hidden GUID, or none kept at the cast's start, clears it too, s
 there is nothing to compare with), by the option's setter, and on
 `PLAYER_ENTERING_WORLD`. Its
 colour is one step colour curve on `UnitHealthPercent`, the low-health tint's pattern:
-gold up to 90%, red above. Whether the client sends these events, whether a
-virtual-button click reaches `PreClick`, and the order of a queued cast's events are
-not checked in game ([forever-api.md](forever-api.md), section 8).
+gold up to 90%, red above. The cue showing, going with a cancelled cast, and moving
+with a queued cast were checked in game on 2026-11-17; whether a virtual-button click
+reaches `PreClick`, and whether a queued cast still starts within the 0.5 s at a higher
+latency, are not checked in game ([forever-api.md](forever-api.md), section 8).
 
 Who counts as a **healer** is one rule, `UnitButton.IsHealer(role, class)`, used
 by both the resource bar's "Healers only" and the low-mana text.

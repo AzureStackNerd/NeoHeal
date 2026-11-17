@@ -157,8 +157,9 @@ in combat where health is hidden from addons: it compares the member with the fi
 Known limit, accepted: a click on a frame that starts no cast, followed within half a
 second by the same spell cast from outside NeoHeal on another member (any spell when
 the game hides that cast's details), shows the cue on the clicked frame until that
-cast ends. Which casts the addon hears, and in what order the cast events arrive, is
-not checked in game.
+cast ends. Checked in game: the cue shows, goes with a cancelled cast, and moves with a
+queued cast. Not checked in game: whether a hover key's click reaches the cue, and
+whether a queued cast still moves it at a higher latency.
 
 HoTs tracked per class: Priest Renew + Power Word: Shield, Druid Rejuvenation +
 Regrowth. Other classes show no HoT icons.

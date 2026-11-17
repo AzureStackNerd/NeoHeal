@@ -228,12 +228,15 @@ Blizzard's generated docs (`UnitDocumentation.lua` on the forever branch of
 cancel-cue backlog item say your own casts are readable, also in combat. Checked in
 game on 2026-11-17: in combat, `C_Secrets.ShouldUnitSpellCastingBeSecret("player")` and
 `C_Secrets.ShouldUnitSpellCastBeSecret("player", "Heal")` both return `false`, and the
-cue showed on your own frame and went with a cancelled cast. Three things the cue rests
-on are **not checked in game**: that a hover key's virtual-button click reaches the button's `PreClick` hook, that
-the client's spell queue starts a queued cast within half a second of the click, and
-whether a cast's end arrives before or after a following cast's start. NeoHeal handles
-a hidden GUID, spell ID or unit by falling back to the click that is still fresh, and
-each of these is listed in the gate file's Not done.
+cue showed on your own frame and went with a cancelled cast. Also checked that day,
+solo with the target frame on yourself: a heal queued during another cast moved the cue
+to the target frame as it started, so in that check the queued cast started within the
+cue's half second of the click, and NeoHeal copes with the order the client
+sends a cast's end and the next cast's start in (which one came first was not logged).
+Two things the cue rests on are **not checked in game**: that a hover key's
+virtual-button click reaches the button's `PreClick` hook, and that a queued cast
+starts within the half second at a higher latency. NeoHeal handles a hidden
+GUID, spell ID or unit by falling back to the click that is still fresh.
 
 `PLAYER_ENTERING_WORLD` is registered as the cue's backstop for a loading screen or a
 zone change, which end your cast with no documented end event.
