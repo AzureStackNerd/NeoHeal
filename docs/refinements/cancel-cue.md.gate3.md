@@ -18,6 +18,11 @@ of the build's message history. The TestWriter's red lines are in `cancel-cue.md
 - Area 4, docs: `docs/features.md`, `docs/architecture.md`, `docs/saved-variables.md`, `docs/forever-api.md`
   (section 8, the cast events), `docs/extending.md` (tests list and checklist), `CLAUDE.md` (Tests paragraph).
   Read back with grep for `showCancelCue`, `cancel cue` and `S52` in each; no command proves prose.
+- Fix round 1 (the Reviewer's CHANGES): the clicked frame's own `UnitGUID` instead of the event's "player";
+  `SetUnit` clears only on a changed token; `ReloadUnitButtons` clears for the target and focus frames; a
+  stored GUID that was hidden at the cast's start clears at the next roster update.
+  `lua spec/run.lua` → 362 tests, 362 successes, 0 failures; `luac -p UnitButton.lua`; CRLF kept. The four
+  new tests of this round went red on `a52a249` before the fix (the TestWriter's gate file).
 
 ## Sites
 
@@ -28,9 +33,10 @@ of the build's message history. The TestWriter's red lines are in `cancel-cue.md
 | UnitButton.lua:1458-1466 | the cue texture in `CreateVisuals`, a child of `overlay` | AC1, AC3 (S1) | features.md, architecture.md |
 | UnitButton.lua:1041-1057 | the click record: `CANCEL_CUE_WINDOW`, `OnPreClick`, `ClickCast.GetClickSpell` | AC4 (S26-S29, S33, S34) | architecture.md (the cue) |
 | UnitButton.lua:1059-1072 | `ClearCancelCueFor`, `ClearCancelCue` | AC2, AC5 (S7-S9, S35-S37) | features.md, architecture.md |
-| UnitButton.lua:1079-1107 | `OnCastStart`: the click that started this cast, every other cue cleared, the per-frame castGUID and UnitGUID | AC3, AC4, AC6 (S1, S24, S25, S38, S46) | architecture.md, forever-api.md §8 |
-| UnitButton.lua:1109-1121 | `OnCastEnd`: one frame when its GUID matches, all when hidden | AC2 (S2, S7-S9, S44) | architecture.md, forever-api.md §8 |
-| UnitButton.lua:1283 | `SetUnit` clears a cue for any unit change, nil included | AC3, AC6 (S21, S48, S49) | architecture.md |
+| UnitButton.lua:1079-1110 | `OnCastStart`: the click that started this cast, every other cue cleared, the per-frame castGUID and the **clicked button's** UnitGUID (fix round 1) | AC3, AC4, AC6 (S1, S22, S24, S25, S38, S46) | architecture.md, forever-api.md §8 |
+| UnitButton.lua:1112-1124 | `OnCastEnd`: one frame when its GUID matches, all when hidden | AC2 (S2, S7-S9, S44) | architecture.md, forever-api.md §8 |
+| UnitButton.lua:1285-1293 | `SetUnit` clears the cue only when the token changes (fix round 1) | AC3, AC6 (S21, S22, S48, S49) | architecture.md |
+| UnitButton.lua:1683-1689 | `ReloadUnitButtons` clears the cue for the target and focus frames, which keep their token (fix round 1) | AC3, AC6 (S21, S48) | architecture.md |
 | UnitButton.lua:1587 | the `PreClick` hook in `Init` | AC4 (S26, S27, S31) | architecture.md |
 | UnitButton.lua:1600-1605 | the `OnHide` clear behind the one-frame visible check | AC3 (S23) | architecture.md |
 | UnitButton.lua:1632-1640 | `UpdateAllButtons` clears on a roster GUID change, a hidden GUID included | AC3, AC6 (S22) | architecture.md |

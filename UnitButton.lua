@@ -1100,8 +1100,11 @@ function UnitButton.OnCastStart(unit, castGUID, spellID)
     ClearCancelCueFor(button)
     button.cancelCueCast = IsSecret(castGUID) and true or castGUID
     -- The member the cast is on, kept as their GUID: a roster change can give the button
-    -- another member without changing its unit token.
-    local guid = UnitGUID and UnitGUID(unit)
+    -- another member without changing its unit token. The GUID is the clicked frame's
+    -- own unit, never the event's: that one is always "player", which would keep your
+    -- own GUID on every frame and drop the cue on the first roster update mid-cast.
+    local clickedUnit = button.unit
+    local guid = clickedUnit and UnitGUID and UnitGUID(clickedUnit)
     button.cancelCueUnitGUID = (guid and not IsSecret(guid)) and guid or nil
     UpdateCancelCue(button)
 end
@@ -1279,8 +1282,13 @@ end
 -- Called whenever the header gives the button a (new) unit, or takes it away.
 local function SetUnit(button, unit)
     -- The frame shows someone else now, or nobody: the cue for a cast on the previous
-    -- member goes, and the heal still lands on that member without a cue anywhere.
-    ClearCancelCueFor(button)
+    -- member goes, and the heal still lands on that member without a cue anywhere. Only
+    -- a changed token counts: a group header sets the same "unit" again when it
+    -- reconfigures its children (not checked in game), and a roster update mid-cast
+    -- must not take a running cue away. The same token with another member is caught
+    -- by the GUID check in UpdateAllButtons, and the target and focus frames drop their
+    -- cue in ReloadUnitButtons, which keeps the token on purpose.
+    if button.unit ~= unit then ClearCancelCueFor(button) end
     button.unit = unit
     local events = button.events
     events:UnregisterAllEvents()
@@ -1632,8 +1640,9 @@ function UnitButton:UpdateAllButtons()
         -- it changes (raid7 was someone else): the cue for a cast on the previous one
         -- goes. A hidden GUID is no proof that the member is the same one, and a cue
         -- on a frame that may show someone else is the wrong answer either way, so a
-        -- hidden answer drops it too.
-        if button.cancelCueCast and button.cancelCueUnitGUID and button.unit then
+        -- hidden answer drops it too, and so does a GUID that was already hidden when
+        -- the cast started (there is none to compare with).
+        if button.cancelCueCast and button.unit then
             local guid = UnitGUID and UnitGUID(button.unit)
             if not guid or IsSecret(guid) or guid ~= button.cancelCueUnitGUID then ClearCancelCueFor(button) end
         end
@@ -1674,6 +1683,9 @@ function UnitButton:ReloadUnitButtons(unit)
             -- healer answer kept for a hidden role belonged to the previous one:
             -- drop it, or a new target in combat inherits the old one's answer.
             button.healerUnit = nil
+            -- Its cue too: it was for whoever the frame showed before. SetUnit keeps a
+            -- cue for an unchanged token, which is right for a header and wrong here.
+            ClearCancelCueFor(button)
             SetUnit(button, unit)
             for _, key in ipairs(RELOADED_CONTAINERS) do
                 local container = button[key]   -- nil without HoTs or cure spells

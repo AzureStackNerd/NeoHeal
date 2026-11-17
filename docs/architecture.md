@@ -128,9 +128,13 @@ whichever side of `OnClick` the client fires the event on. A new start clears ev
 other cue, so a queued cast's start arriving before the previous cast's end moves the
 cue at once. `STOP`, `FAILED`, `INTERRUPTED` and `SUCCEEDED` clear the frame whose
 GUID matches (every frame when the GUID is hidden); a channel is never heard. The cue
-is cleared in `SetUnit`, in the `OnHide` hook after the one-frame visible check, in
-`UpdateAllButtons` when a roster change leaves the token with another member's GUID
-(a hidden GUID included), by the option's setter, and on `PLAYER_ENTERING_WORLD`. Its
+is cleared in `SetUnit` when the button's token changes (a header that sets the same
+token again keeps a running cue), in `ReloadUnitButtons` (the target and focus frames
+keep their token while the member changes), in the `OnHide` hook after the one-frame
+visible check, in `UpdateAllButtons` when a roster change leaves the token with another
+member's GUID (a hidden GUID, or none kept at the cast's start, clears it too, since
+there is nothing to compare with), by the option's setter, and on
+`PLAYER_ENTERING_WORLD`. Its
 colour is one step colour curve on `UnitHealthPercent`, the low-health tint's pattern:
 gold up to 90%, red above. Whether the client sends these events, whether a
 virtual-button click reaches `PreClick`, and the order of a queued cast's events are

@@ -633,6 +633,60 @@ function TestCastCue:testAFrameGivenAnotherMemberDropsTheCue()
     end
 end
 
+-- AC3, S22's control (fix round 1): a roster update that leaves every frame its
+-- member (GROUP_ROSTER_UPDATE, a role change, SPELLS_CHANGED and Layout:Refresh all
+-- run UpdateAllButtons) keeps the cue on a party, a raid and a pet frame.
+function TestCastCue:testARosterUpdateKeepsTheCueForTheSameMember()
+    for _, mode in ipairs({ "readable", "combat" }) do
+        for _, unit in ipairs({ "party1", "raid3", "raidpet1" }) do
+            self:Fresh(mode)
+            local clicked = self:Button(unit)
+            local guid = self:ClickAndCast(clicked)
+            self.UnitButton:UpdateAllButtons()
+            self:AssertLooks({ [clicked] = "running" }, "S22 control: a roster update, " .. unit .. " unchanged")
+            self:Finish(guid, GREATER_HEAL)
+        end
+    end
+end
+
+-- AC3, S22 (fix round 1): a member whose GUID the game hides when the cast starts
+-- can't be told from someone else later, so a roster update takes the cue away.
+function TestCastCue:testAHiddenGUIDAtTheCastsStartDropsTheCueOnARosterUpdate()
+    local party1 = self:Button("party1")
+    self.guids.party1 = Support.Secret("guid")
+    local guid = self:ClickAndCast(party1)
+    self.guids.party1 = nil   -- readable again, the same member
+    self.UnitButton:UpdateAllButtons()
+    self:AssertLooks({}, "S22: a GUID hidden at the cast's start")
+    self:Finish(guid, GREATER_HEAL)
+end
+
+-- AC3, S15 with S22's control (fix round 1): a roster update keeps the cue on your
+-- own frame.
+function TestCastCue:testARosterUpdateKeepsTheCueOnYourOwnFrame()
+    for _, mode in ipairs({ "readable", "combat" }) do
+        self:Fresh(mode)
+        local own = self:Button("player")
+        local guid = self:ClickAndCast(own)
+        self.UnitButton:UpdateAllButtons()
+        self:AssertLooks({ [own] = "running" }, "S22 control: a roster update, your own frame")
+        self:Finish(guid, GREATER_HEAL)
+    end
+end
+
+-- AC3, S22's control (fix round 1): a group header that sets the "unit" attribute
+-- again to the token the frame already has (not checked in game) keeps the cue.
+function TestCastCue:testTheSameUnitSetAgainKeepsTheCue()
+    for _, unit in ipairs({ "party1", "raid3", "player" }) do
+        self:Fresh("readable")
+        local clicked = self:Button(unit)
+        local guid = self:ClickAndCast(clicked)
+        clicked.hooks.OnAttributeChanged(clicked, "unit", unit)
+        self:AssertLooks({ [clicked] = "running" }, "the unit attribute set again to " .. unit)
+        self:Finish(guid, GREATER_HEAL)
+    end
+end
+
 -- AC3, S23: the clicked frame hides during the cast: the cue is gone, and shown
 -- again it shows none; a frame hidden and shown again in one go keeps it.
 function TestCastCue:testAHiddenFrameDropsTheCue()
