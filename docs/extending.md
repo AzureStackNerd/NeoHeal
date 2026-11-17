@@ -157,3 +157,7 @@ In game:
   on the frame; a dead friendly target (res click).
 - The NeoHeal icon in the addon compartment: it shows NeoHeal's name and icon,
   and clicking it opens and closes the options window.
+- Five-second bar, solo and in a raid, in and out of combat: cast a spell that
+  costs mana; a thin bar along the bottom of your own frame's mana strip starts
+  full and runs empty in 5 seconds, and a new cast fills it again. With "Show
+  five-second rule" (Layout) off, no bar.
