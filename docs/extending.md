@@ -127,8 +127,17 @@ nothing else: LuaUnit is included as `spec/luaunit.lua`. The game never loads
   them. `spec/targetfocus_test.lua` covers the target and focus frames on fake
   frames: their unit and template, state driver, size, place, labels, test-mode
   fakes, the reload on a new target or focus, the missing target border, and
-  that the TOC loads the module after the strings. Not
-  covered: how the unit frames look, and the group layout. Anything that
+  that the TOC loads the module after the strings. `spec/lowmana_test.lua`
+  covers the "OOM" text on healers' frames, its 20% line and its setting.
+  `spec/preview_test.lua` covers test mode (`Preview.lua`) on fake frames: groups
+  of five as columns, the sort orders, main tanks and pets, and what each fake
+  member draws. `spec/fivesecond_test.lua` covers the five-second bar on the mana
+  strip of every frame that shows you, with a fake clock. No test reaches
+  whether Forever fires the cast events it listens
+  to, what `C_Spell.GetSpellPowerCost` answers there, or whether
+  `SetAlphaFromBoolean` places the bar on a frame where the game hides whether
+  the unit is you. Not covered: how the
+  real unit frames look, and the layout of the real group headers. Anything that
   depends on the real client stays on the checklist below.
 - Before trusting a new test, break the code it covers in a copy of the addon
   and check that the test fails.
