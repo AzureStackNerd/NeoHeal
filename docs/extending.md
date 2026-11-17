@@ -132,9 +132,14 @@ nothing else: LuaUnit is included as `spec/luaunit.lua`. The game never loads
   `spec/preview_test.lua` covers test mode (`Preview.lua`) on fake frames: groups
   of five as columns, the sort orders, main tanks and pets, and what each fake
   member draws. `spec/fivesecond_test.lua` covers the five-second bar on the mana
-  strip of every frame that shows you, with a fake clock. No test reaches
+  strip of every frame that shows you, with a fake clock. `spec/castcue_test.lua` covers
+  the cancel cue: which clicks and cast starts put it on which frame, its two looks and
+  the 90% line, every way a cast ends, the clears (unit change, hide, roster GUID, the
+  option, a loading screen), and a table over the 450 cells of how a cast starts, the
+  spell and how it ends. No test reaches
   whether Forever fires the cast events it listens
-  to, what `C_Spell.GetSpellPowerCost` answers there, or whether
+  to, what `C_Spell.GetSpellPowerCost` answers there, whether a hover key's virtual click
+  reaches the pre-click hook, or whether
   `SetAlphaFromBoolean` places the bar on a frame where the game hides whether
   the unit is you. Not covered: how the
   real unit frames look, and the layout of the real group headers. Anything that
@@ -163,3 +168,13 @@ In game:
   free (Clearcasting, Inner Focus) starts it too. Target yourself and set
   yourself as focus with those frames on: the target and focus frames show the
   same bar. With "Show five-second rule" (Layout) off, no bar.
+- Cancel cue, solo and in a raid, in and out of combat: bind a slow heal with a cast time
+  (Greater Heal, Healing Touch) to left click and cast it on a member below 90% health.
+  A 3 px band along the bottom of the health bar is gold for the cast; cast on someone
+  above 90% and the band is red from the start. During a cast, let someone else's heal
+  take the member above 90%: the band turns red. Cancel with a movement key or Escape:
+  the band goes at once. Healing a member in your group also shows it on their raid frame
+  only when that is the frame you clicked.
+- Cancel cue, test mode: one fake member shows the red band and another the gold one;
+  with "Show cancel cue" (Layout) off, neither does. Turning it off during a cast in
+  combat hides the band at once.

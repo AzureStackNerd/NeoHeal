@@ -611,3 +611,66 @@ function TestFiveSecondOption:testTheFiveSecondOptionIsOnTheLayoutPage()
     checkbox.scripts.OnClick(checkbox)
     lu.assertEquals(ns.db.layout.showFiveSecond, false, "the checkbox doesn't switch showFiveSecond")
 end
+
+-- The cancel cue (docs/refinements/cancel-cue.md, AC5, S35, S36): a checkbox on the
+-- Layout page, labelled with its string, switches showCancelCue; turned off, it
+-- hides every running cue at once, also in combat, where the layout refresh waits.
+TestCancelCueOption = {}
+
+function TestCancelCueOption:setUp()
+    self.saved = {}
+    for _, name in ipairs(FIVE_SECOND_GLOBALS) do self.saved[name] = { _G[name] } end
+end
+
+function TestCancelCueOption:tearDown()
+    for name, old in pairs(self.saved) do _G[name] = old[1] end
+end
+
+function TestCancelCueOption:testTheCancelCueOptionIsOnTheLayoutPage()
+    local ns = Support.Load({ "Locales/enUS.lua", "Spells.lua", "ClickCast.lua", "Options.lua" })
+    local texts = {}
+    local function OptionsFrame(owner)
+        local frame = { scripts = {}, owner = owner }
+        return setmetatable(frame, { __index = function(_, key)
+            if key == "SetScript" then return function(self, name, func) self.scripts[name] = func end end
+            if key == "SetText" then
+                return function(self, text)
+                    self.text = text
+                    table.insert(texts, self)
+                end
+            end
+            if type(key) == "string" and key:match("^%u") and key ~= "TitleText" then
+                return function(self) return OptionsFrame(self) end
+            end
+        end })
+    end
+    CreateFrame = function(_, _, parent) return OptionsFrame(parent) end
+    UIParent, UISpecialFrames = OptionsFrame(), {}
+    Round = function(value) return math.floor(value + 0.5) end
+    MinimalSliderWithSteppersMixin = { Label = { Right = 1 }, Event = { OnValueChanged = 1 } }
+    CreateMinimalSliderFormatter = function() end
+    local refreshes, clears = 0, 0
+    ns.Layout = { GetSize = function() return {} end, Refresh = function() refreshes = refreshes + 1 end }
+    ns.RunOutOfCombat = function() end   -- in combat: the layout refresh waits
+    ns.UnitButton = { ClearCancelCue = function() clears = clears + 1 end }
+    ns.ClickCast.QueueApply = function() end
+    ns.charDB = { bindings = {}, hoverKeys = {} }
+    ns.db = { layout = { showCancelCue = true } }
+    ns.Spells:Scan()
+    ns.Options:Create()
+    -- A missing string would show its own key (Locales/enUS.lua), so look in the table itself.
+    lu.assertNotNil(rawget(ns.L, "SHOW_CANCEL_CUE"), "no string for the option: the checkbox shows its key")
+    local checkbox
+    for _, frame in ipairs(texts) do
+        if frame.text == ns.L.SHOW_CANCEL_CUE then checkbox = frame.owner end
+    end
+    lu.assertNotNil(checkbox, "no cancel cue checkbox on the Layout page")
+    rawset(checkbox, "GetChecked", function() return false end)
+    checkbox.scripts.OnClick(checkbox)
+    lu.assertEquals(ns.db.layout.showCancelCue, false, "the checkbox doesn't switch showCancelCue")
+    lu.assertEquals(clears, 1, "turned off in combat, the running cue doesn't go at once")
+    rawset(checkbox, "GetChecked", function() return true end)
+    checkbox.scripts.OnClick(checkbox)
+    lu.assertEquals(ns.db.layout.showCancelCue, true, "the checkbox doesn't switch showCancelCue back on")
+    lu.assertEquals(refreshes, 0, "the layout refreshed in combat")
+end

@@ -146,6 +146,30 @@ function TestFiveSecond:testAChannelCountsFromItsStart()
     lu.assertNil(Bar(self.own), "the bar outlasts 5 seconds after the channel started")
 end
 
+-- The cancel cue's AC2, S7 (docs/refinements/cancel-cue.md): a heal clicked on your
+-- own frame and cancelled, interrupted or failed starts no bar, through the real
+-- events; the same heal finished does.
+function TestFiveSecond:testACancelledCastStartsNoBar()
+    self.ns.db.layout.showCancelCue = true
+    self.ns.charDB.bindings["1"] = { action = "spell", spellID = FLASH_HEAL, target = "unit", alsoTarget = false }
+    self.ns.ClickCast.appliedBindings = CopyTable(self.ns.charDB.bindings)
+    for index, ending in ipairs({ "UNIT_SPELLCAST_STOP", "UNIT_SPELLCAST_FAILED", "UNIT_SPELLCAST_INTERRUPTED" }) do
+        Support.SetTime(T0 + index * 10)
+        Support.Click(self.own, "LeftButton")
+        Support.FireEvent("UNIT_SPELLCAST_START", "player", "Cast-" .. index, FLASH_HEAL)
+        Support.FireEvent(ending, "player", "Cast-" .. index, FLASH_HEAL)
+        self:At(index * 10 + 0.1)
+        lu.assertNil(Bar(self.own), ending .. " started the bar")
+    end
+    Support.SetTime(T0 + 40)
+    Support.Click(self.own, "LeftButton")
+    Support.FireEvent("UNIT_SPELLCAST_START", "player", "Cast-9", FLASH_HEAL)
+    Support.FireEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "Cast-9", FLASH_HEAL)
+    Support.FireEvent("UNIT_SPELLCAST_STOP", "player", "Cast-9", FLASH_HEAL)
+    self:At(40.1)
+    AssertBar(self.own, 0.98, "the finished heal didn't start the bar")
+end
+
 -- AC2, S9: a new spell with 2 seconds left fills the bar again for a full 5 seconds.
 function TestFiveSecond:testANewManaSpellFillsTheBarAgain()
     self:Cast(0, FLASH_HEAL)
@@ -467,15 +491,20 @@ end
 function TestFiveSecondCore:setUp()
     local ns = Support.Load({ "Locales/enUS.lua", "Core.lua" })
     self.casts = {}
-    ns.UnitButton = { OnPlayerCast = function(...) table.insert(self.casts, { ... }) end }
+    local noop = function() end
+    ns.UnitButton = { OnPlayerCast = function(...) table.insert(self.casts, { ... }) end,
+                      OnCastStart = noop, OnCastEnd = noop, ClearCancelCue = noop }   -- the cancel cue's handlers
     self.ns = ns
 end
 
 -- AC3, S22: both events are registered for your own casts only: the client marks
 -- their unit argument as one it may hide (not checked in game), so the event
--- itself must say whose cast it is.
+-- itself must say whose cast it is. The cancel cue (docs/refinements/cancel-cue.md,
+-- AC2, S2, S7) registers a cast's start, stop, failure and interruption the same
+-- way; none of them reaches the bar, as such a cast spent no mana.
 function TestFiveSecondCore:testBothCastEventsAreRegistered()
-    for _, event in ipairs({ "UNIT_SPELLCAST_SUCCEEDED", "UNIT_SPELLCAST_CHANNEL_START" }) do
+    for _, event in ipairs({ "UNIT_SPELLCAST_SUCCEEDED", "UNIT_SPELLCAST_CHANNEL_START", "UNIT_SPELLCAST_START",
+                             "UNIT_SPELLCAST_STOP", "UNIT_SPELLCAST_FAILED", "UNIT_SPELLCAST_INTERRUPTED" }) do
         local units
         for _, frame in ipairs(Support.frames) do
             lu.assertNil(frame.stub.events[event], event .. " is registered for every unit")
@@ -483,12 +512,13 @@ function TestFiveSecondCore:testBothCastEventsAreRegistered()
         end
         lu.assertEquals(units, { "player" }, event .. " isn't registered for your own casts only")
     end
-    -- S1, S5: a cast that starts, fails or is interrupted spent no mana.
-    for _, event in ipairs({ "UNIT_SPELLCAST_START", "UNIT_SPELLCAST_FAILED", "UNIT_SPELLCAST_INTERRUPTED" }) do
-        for _, frame in ipairs(Support.frames) do
-            lu.assertNil(frame.stub.events[event], event .. " is registered")
-        end
+    -- S1, S5: a cast that starts, stops, fails or is interrupted spent no mana.
+    self.ns.db = { layout = {} }
+    for _, event in ipairs({ "UNIT_SPELLCAST_START", "UNIT_SPELLCAST_STOP", "UNIT_SPELLCAST_FAILED",
+                             "UNIT_SPELLCAST_INTERRUPTED" }) do
+        lu.assertTrue(Support.FireEvent(event, "player", "Cast-1", FLASH_HEAL), event .. " reaches no handler")
     end
+    lu.assertEquals(self.casts, {}, "a cast that spent no mana reached the five-second bar")
 end
 
 -- A client that doesn't know the events still loads.
@@ -518,4 +548,17 @@ function TestFiveSecondCore:testOnByDefault()
     NeoHealDB, NeoHealCharDB = nil, nil
     ns:PLAYER_LOGIN()
     lu.assertEquals(NeoHealDB.layout.showFiveSecond, true, "Show five-second rule isn't on by default")
+end
+
+-- The cancel cue (docs/refinements/cancel-cue.md, open point 3): on by default, as
+-- the five-second bar.
+function TestFiveSecondCore:testOnByDefaultForTheCue()
+    local noop = function() end
+    local ns = self.ns
+    ns.Spells, ns.Dispel, ns.MissingBuffs = { Scan = noop }, { UpdateKnownDispels = noop }, { UpdateKnownBuffs = noop }
+    ns.ClickCast, ns.Layout = { Initialize = noop, Apply = noop }, { Create = noop }
+    ns.Options, ns.Print = { RegisterSettingsCategory = noop }, noop
+    NeoHealDB, NeoHealCharDB = nil, nil
+    ns:PLAYER_LOGIN()
+    lu.assertEquals(NeoHealDB.layout.showCancelCue, true, "Show cancel cue isn't on by default")
 end

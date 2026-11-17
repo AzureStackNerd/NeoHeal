@@ -214,10 +214,33 @@ window's `PLAYER_REGEN_DISABLED` handler), reach that same `Refresh`. Whether
 the client allows `EnableKeyboard(false)` at the moment combat starts is not
 checked in game.
 
+## 8. Your own cast events carry no target
+
+`UNIT_SPELLCAST_START`, `STOP`, `FAILED`, `INTERRUPTED` and `SUCCEEDED` give an addon
+the caster (`unitTarget`), the cast's GUID, its spell ID and a cast bar ID, never whom
+the cast is on. The five-second bar does not need the target; the cancel cue does, and
+only NeoHeal's own click knows which frame it was on, which is why the cue is per frame
+and a cast started from an action bar or a macro shows none.
+
+Blizzard's generated docs (`UnitDocumentation.lua` on the forever branch of
+[Gethe/wow-ui-source](https://github.com/Gethe/wow-ui-source)) mark the whole payload
+`SecretWhenUnitSpellCastRestricted`; their 12.0.0 notes and the brief research in the
+cancel-cue backlog item say your own casts are readable, also in combat. That Forever
+behaves that way is **not checked in game**, and neither are three things the cue rests
+on: that a hover key's virtual-button click reaches the button's `PreClick` hook, that
+the client's spell queue starts a queued cast within half a second of the click, and
+whether a cast's end arrives before or after a following cast's start. NeoHeal handles
+a hidden GUID, spell ID or unit by falling back to the click that is still fresh, and
+each of these is listed in the gate file's Not done.
+
+`PLAYER_ENTERING_WORLD` is registered as the cue's backstop for a loading screen or a
+zone change, which end your cast with no documented end event.
+
 ## Checklist before shipping a change
 
 - [ ] Does it touch a secure frame or attribute? → `RunOutOfCombat`.
 - [ ] Could any API value be secret? → no `if`, no `<`, no `+` on it.
 - [ ] Does it read auras? → it needs a combat path through `AuraContainer`, or it hides in combat.
 - [ ] Does it register a new event? → guard with `C_EventUtils.IsEventValid`.
+- [ ] Does it read a cast event? → the payload may be hidden; compare by name, never by a hidden ID.
 - [ ] Test in combat, with a raid marker, and with `/neoheal debug`.

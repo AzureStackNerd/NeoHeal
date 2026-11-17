@@ -188,6 +188,26 @@ local function ShowFakeFiveSecond(frame, show)
     frame.fiveSecond:SetShown(show and NeoHeal.db.layout.showFiveSecond == true)
 end
 
+-- The cancel cue on two fake frames: member 3 stands above the cue's line and shows
+-- the "no longer needed" look, member 5 (the frame under your mouse) the "still
+-- needed" one. Members 1 and 2 are the target and focus previews, which show none.
+local CANCEL_CUE_FULL_MEMBER = 3
+local CANCEL_CUE_RUNNING_MEMBER = 5
+
+-- The cancel cue's two looks, still (test mode casts nothing), on the two members
+-- above and only while the option is on.
+local function ShowFakeCancelCue(frame, member)
+    if not NeoHeal.db.layout.showCancelCue then
+        frame.cancelCue:Hide()
+    elseif member == CANCEL_CUE_FULL_MEMBER then
+        NeoHeal.UnitButton.ShowCancelCue(frame, true)
+    elseif member == CANCEL_CUE_RUNNING_MEMBER then
+        NeoHeal.UnitButton.ShowCancelCue(frame, false)
+    else
+        frame.cancelCue:Hide()
+    end
+end
+
 -- The heal prediction of your left click shows on the frame under the mouse;
 -- here member 5 plays that frame. Every other frame gets empty, hidden bars.
 local PREDICTION_MEMBER = 5
@@ -204,6 +224,9 @@ end
 local function Decorate(frame, member)
     local class = GetClass(member)
     local healthFraction = 0.25 + ((member * 37) % 75) / 100
+    -- Member 3 shows the cancel cue's "no longer needed" look, so this member stands
+    -- above the cue's line; the heal-prediction member shows the "still needed" one.
+    if member == CANCEL_CUE_FULL_MEMBER then healthFraction = 0.95 end
     local powerColor = NeoHeal.UnitButton.PowerColor(POWER_BY_CLASS[class] or "MANA")
 
     NeoHeal.UnitButton.ApplyStyle(frame)
@@ -215,6 +238,7 @@ local function Decorate(frame, member)
     NeoHeal.UnitButton.ShowLowHealth(frame, healthFraction)
     ShowFakeLowMana(frame, member)
     ShowFakeFiveSecond(frame, member == LOW_MANA_MEMBER)
+    ShowFakeCancelCue(frame, member)
     ShowFakePrediction(frame, NeoHeal.db.layout.showHealPrediction and member == PREDICTION_MEMBER)
     -- Every seventh member (the first tank among them) wears a shield.
     frame.absorb:SetValue(0.2)
@@ -273,6 +297,7 @@ local function DecoratePet(frame, pet)
     NeoHeal.UnitButton.ShowLowHealth(frame, healthFraction)
     frame.lowManaText:Hide()   -- pets are never healers
     frame.fiveSecond:Hide()    -- and never show you, so never show the bar
+    frame.cancelCue:Hide()     -- and no heal is ever cast on a pet's frame
     ShowFakePrediction(frame, false)
     frame.absorb:Hide()
     NeoHeal.UnitButton.AnchorAmountBars(frame)

@@ -293,6 +293,65 @@ function UnitButton.ShowLowHealth(frame, fraction)
     frame.lowHealth:Show()
 end
 
+---------------------------------------------------------------------------
+-- The cancel cue: while you cast a heal on a member from that member's frame, a band
+-- on the bottom edge of the frame's health bar says whether the heal is still needed.
+-- Gold while the member is at or below 90% health, red from just above it: the colour
+-- of an action indicator follows its meaning, and red is what Blizzard's own cast bar
+-- shows for a cast that will not finish (Remco in game, 2026-11-17). Which cast is on
+-- which frame is decided by the click attribution further down; this part only draws.
+---------------------------------------------------------------------------
+local CANCEL_CUE_HEIGHT = 3
+local CANCEL_CUE_LINE = 0.9                             -- "no longer needed": above 90%; exactly 90% is still needed
+local CANCEL_CUE_RUNNING_COLOR = { 1, 0.7, 0, 0.8 }     -- gold, Blizzard's casting bar colour
+local CANCEL_CUE_FULL_COLOR = { 1, 0, 0, 1 }            -- red, its interrupted/failed colour
+local cancelCueCurve
+
+-- For a readable answer (also used by the test mode preview).
+function UnitButton.ShowCancelCue(frame, aboveLine)
+    frame.cancelCue:SetVertexColor(unpack(aboveLine and CANCEL_CUE_FULL_COLOR or CANCEL_CUE_RUNNING_COLOR))
+    frame.cancelCue:Show()
+end
+
+-- One frame's cue, redrawn whenever its health changes. In combat health can be
+-- secret, so a step colour curve gives the colour (the low-health tint's pattern):
+-- gold up to the line, red from just above it. The result is secret too, which
+-- SetVertexColor accepts. A dead or offline member shows none: the frame reads
+-- "Dead"/"Offline", and a heal is never "no longer needed" there.
+local function UpdateCancelCue(button)
+    local band = button.cancelCue
+    if not band then return end
+    if not button.cancelCueCast or not NeoHeal.db or not NeoHeal.db.layout.showCancelCue then
+        band:Hide()
+        return
+    end
+    local unit = button.unit
+    if not unit or IsDeadOrOffline(unit) then
+        band:Hide()
+        return
+    end
+    if not (UnitHealthPercent and C_CurveUtil and C_CurveUtil.CreateColorCurve) then
+        UnitButton.ShowCancelCue(button, GetHealthFraction(unit) > CANCEL_CUE_LINE)
+        return
+    end
+
+    if not cancelCueCurve then
+        local rr, rg, rb, ra = unpack(CANCEL_CUE_RUNNING_COLOR)
+        local fr, fg, fb, fa = unpack(CANCEL_CUE_FULL_COLOR)
+        cancelCueCurve = C_CurveUtil.CreateColorCurve()
+        cancelCueCurve:SetType(Enum.LuaCurveType.Linear)
+        cancelCueCurve:AddPoint(0, CreateColor(rr, rg, rb, ra))
+        cancelCueCurve:AddPoint(CANCEL_CUE_LINE, CreateColor(rr, rg, rb, ra))
+        cancelCueCurve:AddPoint(CANCEL_CUE_LINE + 0.001, CreateColor(fr, fg, fb, fa))
+        cancelCueCurve:AddPoint(1, CreateColor(fr, fg, fb, fa))
+    end
+    local ok = pcall(function()
+        band:SetVertexColor(UnitHealthPercent(unit, true, cancelCueCurve):GetRGBA())
+    end)
+    band:SetShown(ok)
+end
+UnitButton.UpdateCancelCue = UpdateCancelCue   -- the tests use it
+
 -- "Health text": the percentage, or the deficit (health missing, e.g. "-2340"),
 -- which is what Classic healers pick a spell rank by. Nothing shows at full
 -- health; in combat the deficit is secret and can't be compared with 0, so a
@@ -470,6 +529,7 @@ local function UpdateHealth(button)
     end
     UpdateLowHealth(button, status ~= nil)
     UpdateLowMana(button)   -- also for coming back from dead or offline
+    UpdateCancelCue(button)   -- follows health, and hides on a dead or offline member
     UpdateIncomingHeals(button)
     UpdateHealPrediction(button)
     UpdateAbsorbs(button)
@@ -964,6 +1024,104 @@ function UnitButton.OnPlayerCast(unit, castGUID, spellID)
     UnitButton.UpdateFiveSecond()
 end
 
+---------------------------------------------------------------------------
+-- Which frame the cast is on. The cast events carry no target (Blizzard's generated
+-- UnitDocumentation.lua on the forever branch: unitTarget, castGUID, spellID), so a
+-- cast is tied to a frame by the click that started it: the button's PreClick hook
+-- records the click before anything else runs, and the cast's start takes the newest
+-- fresh record. PreClick rather than PostClick so the newest record is the click
+-- being made whichever side of OnClick the client fires the event on. Whether a
+-- hover key's virtual-button click reaches the hook at all is not checked in game.
+--
+-- One cue per frame, holding the cast's castGUID: an end event clears only the frame
+-- whose cast it ends, so a queued cast's start before the old cast's end keeps the
+-- new cue. With hidden details the cue holds `true` and every end event clears it,
+-- as only one cast of yours runs at a time then.
+---------------------------------------------------------------------------
+local CANCEL_CUE_WINDOW = 0.5   -- seconds; how long a click may precede the cast it starts
+local pendingClick               -- { button, spellID, name, at }: the newest click that casts on a member
+
+-- A click on a unit button, before anything else sees it (UnitButton.Init's PreClick
+-- hook): recorded only for a spell bound to cast on the clicked member itself, on a
+-- living, connected member. The res swap (ClickCast.RES_SNIPPET) happens after this
+-- for a dead member, so a res is never in the record.
+function UnitButton.OnPreClick(button, mouseButton)
+    pendingClick = nil
+    if not NeoHeal.db or not NeoHeal.db.layout.showCancelCue then return end
+    local unit = button.unit
+    if not unit or IsDeadOrOffline(unit) then return end
+    local spellID, name = NeoHeal.ClickCast.GetClickSpell(mouseButton)
+    if not spellID then return end
+    pendingClick = { button = button, spellID = spellID, name = name, at = GetTime() }
+end
+
+-- Hides one frame's cue and forgets its cast. The unit's GUID is dropped with it.
+local function ClearCancelCueFor(button)
+    button.cancelCueCast = nil
+    button.cancelCueUnitGUID = nil
+    if button.cancelCue then button.cancelCue:Hide() end
+end
+
+-- Hides every cue: the option went off, a loading screen, a reload.
+function UnitButton.ClearCancelCue()
+    pendingClick = nil
+    for button in pairs(UnitButton.buttons) do
+        ClearCancelCueFor(button)
+    end
+end
+
+-- Your cast started (UNIT_SPELLCAST_START, for "player"): the frame is the one the
+-- newest click was on, if that click is fresh enough and its spell is this cast's.
+-- Spells are compared by name while both are readable: a binding's ID and the
+-- event's can differ by rank or by an override. A hidden value on either side falls
+-- back to freshness alone (not checked in game). The record is used up, so a cast
+-- that starts with no click of its own shows no cue.
+function UnitButton.OnCastStart(unit, castGUID, spellID)
+    if not NeoHeal.db or not NeoHeal.db.layout.showCancelCue then return end
+    local click = pendingClick
+    pendingClick = nil
+    if not click then return end
+    if IsSecret(unit) or unit == "player" then
+        -- yours; the event is registered for "player" only, and a hidden unit is no
+        -- proof that a cast is someone else's
+    else
+        return
+    end
+    if GetTime() - click.at > CANCEL_CUE_WINDOW then return end
+    local castName = (not IsSecret(spellID)) and C_Spell.GetSpellName(spellID) or nil
+    if castName and click.name and castName ~= click.name then return end
+    -- Only one cast of yours runs at a time, so a new start ends whatever cue was up:
+    -- a queued cast's start can arrive before the previous cast's own end, and the cue
+    -- moves at the moment the queued cast starts (S25, S46).
+    for other in pairs(UnitButton.buttons) do
+        if other.cancelCueCast then ClearCancelCueFor(other) end
+    end
+    local button = click.button
+    ClearCancelCueFor(button)
+    button.cancelCueCast = IsSecret(castGUID) and true or castGUID
+    -- The member the cast is on, kept as their GUID: a roster change can give the button
+    -- another member without changing its unit token.
+    local guid = UnitGUID and UnitGUID(unit)
+    button.cancelCueUnitGUID = (guid and not IsSecret(guid)) and guid or nil
+    UpdateCancelCue(button)
+end
+UnitButton.OnCastStart = UnitButton.OnCastStart   -- the tests use it
+
+-- Your cast ended, however the client reports it: STOP, FAILED, INTERRUPTED or
+-- SUCCEEDED (S44: an end reported only as the success still clears the cue). Only
+-- the frame whose cast it ends is cleared; a hidden castGUID ends whatever runs.
+function UnitButton.OnCastEnd(unit, castGUID)
+    if IsSecret(unit) == false and unit ~= "player" and unit ~= nil then return end
+    for button in pairs(UnitButton.buttons) do
+        if button.cancelCueCast then
+            if IsSecret(castGUID) or button.cancelCueCast == true or button.cancelCueCast == castGUID then
+                ClearCancelCueFor(button)
+            end
+        end
+    end
+end
+UnitButton.OnCastEnd = UnitButton.OnCastEnd   -- the tests use it
+
 -- The top line: the name on the left, always at the same spot so names line up
 -- down a column, and the status icons on the right. From the right: raid target
 -- marker, role icon, then a crown for the group leader or a flag for raid
@@ -1120,6 +1278,9 @@ end
 
 -- Called whenever the header gives the button a (new) unit, or takes it away.
 local function SetUnit(button, unit)
+    -- The frame shows someone else now, or nobody: the cue for a cast on the previous
+    -- member goes, and the heal still lands on that member without a cue anywhere.
+    ClearCancelCueFor(button)
     button.unit = unit
     local events = button.events
     events:UnregisterAllEvents()
@@ -1291,6 +1452,17 @@ function UnitButton.CreateVisuals(frame)
     highlight:Hide()
     frame.highlight = highlight
 
+    -- The cancel cue (UpdateCancelCue): a band on the bottom edge of the health bar, a
+    -- child of overlay (health's level + 3), so the amount bars at health's level + 1
+    -- cannot draw over it, and health's clipping keeps it inside the bar.
+    local cancelCue = overlay:CreateTexture(nil, "OVERLAY")
+    cancelCue:SetPoint("BOTTOMLEFT")
+    cancelCue:SetPoint("BOTTOMRIGHT")
+    cancelCue:SetHeight(CANCEL_CUE_HEIGHT)
+    cancelCue:SetTexture(WHITE_TEXTURE)
+    cancelCue:Hide()
+    frame.cancelCue = cancelCue
+
     local targetBorder = CreateFrame("Frame", nil, frame, "BackdropTemplate")
     targetBorder:SetAllPoints()
     targetBorder:SetFrameLevel(health:GetFrameLevel() + 4)
@@ -1411,6 +1583,8 @@ end
 function UnitButton.Init(button)
     UnitButton.CreateVisuals(button)
     button:HookScript("OnEnter", OnEnter)
+    -- Before the click is handled: the cancel cue's record of what this click casts.
+    button:HookScript("PreClick", UnitButton.OnPreClick)
     button:HookScript("OnClick", UnitButton.PrintClick)   -- after the click; only prints with /neoheal clicks
     -- PostClick also runs when the click snippet cancelled the click.
     button:HookScript("PostClick", NeoHeal.MissingBuffs.ExplainClick)
@@ -1422,7 +1596,12 @@ function UnitButton.Init(button)
     -- header in one go, and a button that is back by then keeps its hover.
     button:HookScript("OnHide", function(self)
         C_Timer.After(0, function()
-            if not self:IsVisible() then OnLeave(self) end
+            if not self:IsVisible() then
+                OnLeave(self)
+                -- A frame that really went away shows no cue; one that a Layout:Refresh
+                -- hid and showed again by the next frame keeps a running one.
+                ClearCancelCueFor(self)
+            end
         end)
     end)
 
@@ -1449,6 +1628,15 @@ end
 
 function UnitButton:UpdateAllButtons()
     for button in pairs(self.buttons) do
+        -- A roster change can leave a button its unit token while the person behind
+        -- it changes (raid7 was someone else): the cue for a cast on the previous one
+        -- goes. A hidden GUID is no proof that the member is the same one, and a cue
+        -- on a frame that may show someone else is the wrong answer either way, so a
+        -- hidden answer drops it too.
+        if button.cancelCueCast and button.cancelCueUnitGUID and button.unit then
+            local guid = UnitGUID and UnitGUID(button.unit)
+            if not guid or IsSecret(guid) or guid ~= button.cancelCueUnitGUID then ClearCancelCueFor(button) end
+        end
         UpdateAll(button)
     end
 end

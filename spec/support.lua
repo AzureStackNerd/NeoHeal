@@ -33,6 +33,26 @@ CATALOGUE[POWER_WORD_SHIELD] = { name = "Power Word: Shield", subName = "Rank 1"
 CATALOGUE[POWER_WORD_SHIELD_10] = { name = "Power Word: Shield", subName = "Rank 10" }
 CATALOGUE[ICE_BARRIER] = { name = "Ice Barrier", subName = "Rank 1" }
 
+-- The spells of the cancel cue's tests (spec/castcue_test.lua), rank 1 each, in no
+-- spellbook. Their ids are Classic's as far as known, not checked in game: Greater
+-- Heal (a slow heal with a cast time), Prayer of Healing and Chain Heal (group heals
+-- with a cast time), Resurrection, Renew (an instant), Health Funnel and Mind Flay
+-- (channels).
+Support.GREATER_HEAL = 2060
+Support.PRAYER_OF_HEALING = 596
+Support.CHAIN_HEAL = 1064
+Support.RESURRECTION = 2006
+Support.RENEW = 139
+Support.HEALTH_FUNNEL = 755
+Support.MIND_FLAY = 15407
+CATALOGUE[Support.GREATER_HEAL] = { name = "Greater Heal", subName = "Rank 1" }
+CATALOGUE[Support.PRAYER_OF_HEALING] = { name = "Prayer of Healing", subName = "Rank 1" }
+CATALOGUE[Support.CHAIN_HEAL] = { name = "Chain Heal", subName = "Rank 1" }
+CATALOGUE[Support.RESURRECTION] = { name = "Resurrection", subName = "Rank 1" }
+CATALOGUE[Support.RENEW] = { name = "Renew", subName = "Rank 1" }
+CATALOGUE[Support.HEALTH_FUNNEL] = { name = "Health Funnel", subName = "Rank 1" }
+CATALOGUE[Support.MIND_FLAY] = { name = "Mind Flay", subName = "Rank 1" }
+
 local state = {
     book = {},              -- spell IDs in the spellbook, in order
     known = {},             -- [spellID] = true
@@ -262,7 +282,15 @@ function Support.Recorder(kind, name, parent)
     function frame:SetAttribute(key, value) self.attributes = self.attributes or {}; self.attributes[key] = value end
     function frame:GetAttribute(key) return (self.attributes or {})[key] end
     function frame:SetScript(scriptName, func) self.scripts = self.scripts or {}; self.scripts[scriptName] = func end
-    function frame:HookScript(scriptName, func) self.hooks = self.hooks or {}; self.hooks[scriptName] = func end
+    -- A second hook on the same script runs after the first, as in the game.
+    function frame:HookScript(scriptName, func)
+        self.hooks = self.hooks or {}
+        local earlier = self.hooks[scriptName]
+        self.hooks[scriptName] = earlier and function(...) earlier(...); func(...) end or func
+    end
+    -- The last colour given by either call, as { r, g, b, a } (a is 1 when not given).
+    function frame:SetVertexColor(r, g, b, a) Record("SetVertexColor", r, g, b, a); self.color = { r, g, b, a or 1 } end
+    function frame:SetColorTexture(r, g, b, a) Record("SetColorTexture", r, g, b, a); self.color = { r, g, b, a or 1 } end
     function frame:CreateFontString() return Support.Recorder("FontString", nil, frame) end
     function frame:CreateTexture() return Support.Recorder("Texture", nil, frame) end
     return setmetatable(frame, { __index = function(_, key)
@@ -276,14 +304,25 @@ end
 -- as on a real secret value, and issecretvalue (as Support.LoadUnitButtons
 -- installs it) says it is one.
 Support.hidden = {}
-function Support.Secret(name)
+Support.revealed = {}   -- [secret] = the value a test gave it (Support.Secret's `value`)
+
+-- `value`, when given, is what the secret stands for: the addon can't read it, a
+-- test can, with Support.Reveal.
+function Support.Secret(name, value)
     local function refuse() error("used the secret " .. name, 2) end
     local secret = setmetatable({}, { __eq = refuse, __lt = refuse, __le = refuse, __add = refuse, __sub = refuse,
                                       __mul = refuse, __div = refuse, __unm = refuse, __concat = refuse,
                                       __len = refuse, __index = refuse, __call = refuse,
                                       __tostring = function() return "secret " .. name end })
     Support.hidden[secret] = true
+    Support.revealed[secret] = value
     return secret
+end
+
+-- What a value stands for: a secret's own value, anything else as it is.
+function Support.Reveal(value)
+    if Support.hidden[value] then return Support.revealed[value] end
+    return value
 end
 
 -- Core, the click casting and UnitButton.lua loaded for real unit buttons on
@@ -451,6 +490,72 @@ function Support.RunSnippet(snippet, attributes, mouseButton, world)
         chunk = assert(load(source, "RES_SNIPPET", "t", env))
     end
     return chunk(frame, mouseButton)
+end
+
+-- Sends `event` with its arguments to every frame made since the last Load that
+-- registered it: for every unit (RegisterEvent), or for the unit in the first
+-- argument (RegisterUnitEvent). A unit the game hides counts as "player", as only
+-- your own events reach a frame registered for "player". Returns whether any frame
+-- heard it, so a test can tell an event nobody registered from one that did nothing.
+function Support.FireEvent(event, ...)
+    local unit = ...
+    if Support.hidden[unit] then unit = "player" end
+    local heard = false
+    for _, frame in ipairs(Support.frames) do
+        local wants = frame.stub.events[event]
+        for _, registered in ipairs(frame.stub.unitEvents[event] or {}) do
+            if rawequal(registered, unit) then wants = true end
+        end
+        local handler = frame.stub.scripts.OnEvent
+        if wants and handler then
+            handler(frame, event, ...)
+            heard = true
+        end
+    end
+    return heard
+end
+
+-- A click on a Recorder button with `mouseButton` ("LeftButton", "RightButton",
+-- "Button4", or a hover key's "neokey1"), with the modifiers Support.SetModifiers
+-- set: its PreClick, OnClick and PostClick scripts and hooks, in the game's order.
+-- What the click casts is not here: the test fires the cast events the game would.
+function Support.Click(button, mouseButton)
+    for _, name in ipairs({ "PreClick", "OnClick", "PostClick" }) do
+        local script = button.scripts and button.scripts[name]
+        if script then script(button, mouseButton, false) end
+        local hook = button.hooks and button.hooks[name]
+        if hook then hook(button, mouseButton, false) end
+    end
+end
+
+-- The cancel cue's two looks (the look kept in game on 2026-11-17): running gold while
+-- the heal is still needed, red once the member is above the line.
+Support.CUE_RUNNING = { 1, 0.7, 0, 0.8 }
+Support.CUE_FULL = { 1, 0, 0, 1 }
+
+local function SameColor(color, expected)
+    for index = 1, 4 do
+        if math.abs(color[index] - expected[index]) > 1e-6 then return false end
+    end
+    return true
+end
+
+-- What a real button's cancel cue shows: "none" (hidden, alpha 0, or a colour with
+-- alpha 0), "running", "full", or a text naming any other colour, so a failing
+-- assertion says what it saw. A hidden colour (a curve's answer in combat) is read
+-- through Support.Reveal.
+function Support.CueLook(button)
+    local cue = button.cancelCue
+    if not cue then return "no cue texture" end
+    if not cue.shown or cue.alpha == 0 then return "none" end
+    if not cue.color then return "shown without a colour" end
+    local color = {}
+    for index = 1, 4 do color[index] = Support.Reveal(cue.color[index]) end
+    if color[4] == 0 then return "none" end
+    if SameColor(color, Support.CUE_RUNNING) then return "running" end
+    if SameColor(color, Support.CUE_FULL) then return "full" end
+    return string.format("colour %s, %s, %s, %s", tostring(color[1]), tostring(color[2]), tostring(color[3]),
+        tostring(color[4]))
 end
 
 -- Makes C_Spell.GetSpellSubtext return "" (the scan still sees the spellbook's subName).

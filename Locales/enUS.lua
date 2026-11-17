@@ -109,6 +109,7 @@ L.SHOW_AGGRO = "Show aggro"
 L.SHOW_LOW_MANA = "Show low mana"
 L.LOW_MANA_TEXT = "OOM"   -- over the health bar of a healer at 20% mana or less
 L.SHOW_FIVE_SECOND = "Show five-second rule"   -- the bar on your own mana strip after a cast
+L.SHOW_CANCEL_CUE = "Show cancel cue"   -- the band on the frame you cast a heal on
 L.SHOW_TOOLTIPS = "Show tooltips"
 L.SHOW_PETS = "Show pets"
 L.SHOW_TARGET_FRAME = "Show target frame"

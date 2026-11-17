@@ -561,6 +561,69 @@ end
 local TARGET_LABELS = {}   -- [target value] = label
 for _, choice in ipairs(ClickCast.TARGETS) do TARGET_LABELS[choice.value] = choice.label end
 
+---------------------------------------------------------------------------
+-- What a click casts, for the cancel cue (UnitButton.lua). The cast events carry
+-- no target, so a cast is tied to the frame by the click that started it: the frame
+-- tells whether a click was a spell binding on the member itself, and the cue finds
+-- the spell from the attributes last applied to the frames (self.attributes), the
+-- same source the tooltip and GetLeftClickSpell read. Never from the button's own
+-- "spell" attribute: a "Cast and also target" binding is a macro with no spellID in
+-- it. Not checked in game: whether a virtual-button click (a hover key) reaches the
+-- button's PreClick hook at all.
+---------------------------------------------------------------------------
+-- Group heals, per class: a cast on one member says nothing about the others the
+-- spell reaches, so no cue shows for them. Spell IDs turned into names at run time,
+-- as Hots.lua does for its HoTs, so every language and every rank of the spell is
+-- covered; the IDs are Classic-era's, not checked in game.
+local GROUP_HEALS = {
+    PRIEST = { 596 },          -- Prayer of Healing
+    SHAMAN = { 1064 },         -- Chain Heal
+}
+local groupHealNames
+
+local function GetGroupHealNames()
+    if not groupHealNames then
+        groupHealNames = {}
+        local _, class = UnitClass("player")
+        for _, spellID in ipairs(GROUP_HEALS[class] or {}) do
+            local name = C_Spell.GetSpellName(spellID)
+            if name then groupHealNames[name] = true end
+        end
+    end
+    return groupHealNames
+end
+
+-- The binding key a click uses, from the mouse button the hook reports and the
+-- modifiers held now: "shift-1" for shift + left click, and "shift--neokey1" for a
+-- hover key, whose click arrives as the virtual button "neokey1" (the agent's name
+-- for it, as PrintClick reads it) bound with every modifier prefix.
+local function ClickBindingKey(prefix, mouseButton)
+    local id = mouseButton == "LeftButton" and "1" or mouseButton == "RightButton" and "2"
+        or mouseButton == "MiddleButton" and "3" or mouseButton:match("^Button(%d+)$")
+    if id then return prefix .. id end
+    local hoverSlot = mouseButton:match("^neokey(%d+)$")
+    return hoverSlot and (prefix .. "-neokey" .. hoverSlot) or nil
+end
+
+-- The spell this click casts on the clicked member itself, or nil: another action
+-- (menu, Target, missing buff), a spell sent to the member's target or their
+-- target's target, or a spell whose name the game doesn't give. A group heal gets
+-- nil too: the clicked member being full says nothing about the others it reaches.
+-- Read from the bindings last applied to the frames, the same source the tooltip and
+-- GetLeftClickSpell use, so the answer is what the frames do now.
+function ClickCast.GetClickSpell(mouseButton)
+    local bindings = ClickCast.appliedBindings or (NeoHeal.charDB and NeoHeal.charDB.bindings)
+    local key = bindings and ClickBindingKey(ClickCast.GetModifierPrefix(), mouseButton)
+    local binding = key and bindings[key]
+    -- An instant or a cast-time spell both count here; whether a cast actually
+    -- started is the cast event's answer, not this one.
+    if not binding or binding.action ~= "spell" or binding.target ~= "unit" then return nil end
+    local spellID = ClickCast:GetSpellValue(binding)
+    local name = C_Spell.GetSpellName(spellID)
+    if not name or GetGroupHealNames()[name] then return nil end
+    return spellID, name
+end
+
 -- How much a spell heals or absorbs, read from its description, so the numbers of
 -- exactly this rank: "Heals a friendly target for 237 to 280." gives "237-280";
 -- "... absorbing 942 damage" an absorb of 942; a HoT gives its total ("Heals the

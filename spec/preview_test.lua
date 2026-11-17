@@ -37,7 +37,8 @@ local function Recorder(kind)
     function frame:SetText(text) self.text = text end
     function frame:SetValue(value) self.value = value end
     function frame:SetStatusBarColor(r, g, b) self.barColor = { r, g, b } end
-    function frame:SetVertexColor(r, g, b) self.vertexColor = { r, g, b } end
+    function frame:SetVertexColor(r, g, b, a) self.vertexColor = { r, g, b }; self.color = { r, g, b, a or 1 } end
+    function frame:SetColorTexture(r, g, b, a) self.color = { r, g, b, a or 1 } end
     function frame:SetTexture(file) self.texture = file end
     function frame:SetAtlas(atlas) self.atlas = atlas end
     function frame:GetFrameLevel() return 1 end
@@ -422,5 +423,31 @@ function TestPreview:testFiveSecondBarOnOneFakeHealer()
     self.Preview:Show(40)
     for _, entry in ipairs(self:Shown()) do
         lu.assertFalse(entry.frame.fiveSecond.shown, entry.name .. " shows a five-second bar with the option off")
+    end
+end
+
+-- The cancel cue (docs/refinements/cancel-cue.md, AC7, S40, S50): with the option
+-- on, member 3 shows the "no longer needed" look and member 5 the "still needed"
+-- one; members 1 and 2 (whom the fake focus and target frames draw), every other
+-- member and every pet show none, also on frames reused from before. Off, none.
+function TestPreview:testTheCancelCueOnTwoFakeFrames()
+    local layout = self.ns.db.layout
+    layout.showCancelCue, layout.showPets, layout.mainTankPosition = true, true, "first"
+    self.Preview:Show(40)   -- with the main tanks first, other members' frames draw these members now
+    layout.mainTankPosition = "none"
+    for _, frame in ipairs(self.Preview.frames) do   -- a cue left on every reused frame, pets' too
+        frame.cancelCue:SetVertexColor(1, 0, 0, 1)
+        frame.cancelCue:Show()
+    end
+    self.Preview:Show(40)
+    local expected = { Thornwood = "full", Stormhoof = "running" }
+    for _, entry in ipairs(self:Shown()) do
+        lu.assertEquals(Support.CueLook(entry.frame), expected[entry.name] or "none", entry.name .. "'s cue")
+    end
+    lu.assertTrue(self:Frame("Thornwood").health.value > 0.9, "the fake member with the full cue isn't above the line")
+    layout.showCancelCue = false
+    self.Preview:Show(40)
+    for _, entry in ipairs(self:Shown()) do
+        lu.assertEquals(Support.CueLook(entry.frame), "none", entry.name .. " shows the cue with the option off")
     end
 end

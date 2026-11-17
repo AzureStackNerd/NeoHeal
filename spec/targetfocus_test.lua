@@ -743,3 +743,54 @@ function TestTargetFocusFiveSecond:testTheBarFollowsTheTargetToAndFromYou()
     self.UnitButton:ReloadUnitButtons("target")
     lu.assertNil(FiveSecondBar(self.target), "the target frame keeps the bar after switching away from you")
 end
+
+---------------------------------------------------------------------------
+-- The cancel cue on the target and focus frames (docs/refinements/cancel-cue.md)
+---------------------------------------------------------------------------
+TestTargetFocusCancelCue = {}
+
+function TestTargetFocusCancelCue:tearDown() Restore() end
+
+function TestTargetFocusCancelCue:setUp()
+    local ns = Support.LoadUnitButtons(Override)
+    ns.db.layout.showCancelCue = true
+    ns.charDB.bindings["1"] = { action = "spell", spellID = Support.GREATER_HEAL, target = "unit", alsoTarget = false }
+    ns.ClickCast.appliedBindings = CopyTable(ns.charDB.bindings)
+    Override("GameTooltip", { IsOwned = function() return false end, Hide = function() end })
+    Override("UnitGUID", function(unit) return "Player-" .. unit end)
+    Support.SetTime(1000)
+    self.ns, self.guid = ns, 0
+end
+
+-- A left click on `button` and the game starting Greater Heal 50 ms later.
+function TestTargetFocusCancelCue:ClickAndCast(button)
+    Support.Click(button, "LeftButton")
+    Support.SetTime(Support.now + 0.05)
+    self.guid = self.guid + 1
+    Support.FireEvent("UNIT_SPELLCAST_START", "player", "Cast-" .. self.guid, Support.GREATER_HEAL)
+    return "Cast-" .. self.guid
+end
+
+-- AC3, S21, S48: a target (or focus) switch during a cast from that frame takes the
+-- cue off it at once; the new member never shows the old cast's cue, also when the
+-- switch goes back to the member during the same cast; the next cast shows it.
+function TestTargetFocusCancelCue:testTheCueLeavesTheTargetFrameOnATargetSwitch()
+    for _, case in ipairs({ { "target", "PLAYER_TARGET_CHANGED" }, { "focus", "PLAYER_FOCUS_CHANGED" } }) do
+        local frame = Support.RealButton(self.ns, case[1])
+        local guid = self:ClickAndCast(frame)
+        lu.assertEquals(Support.CueLook(frame), "running", case[1] .. ": no cue before the switch")
+        lu.assertTrue(Support.FireEvent(case[2]), case[2] .. " reaches no handler")
+        lu.assertEquals(Support.CueLook(frame), "none", "S21: the " .. case[1] .. " frame kept the cue after a switch")
+        frame.events.scripts.OnEvent(frame.events, "UNIT_HEALTH", case[1])
+        lu.assertEquals(Support.CueLook(frame), "none", "S21: the new " .. case[1] .. " shows the old cast's cue")
+        Support.FireEvent(case[2])   -- S48: back to the member, same cast
+        frame.events.scripts.OnEvent(frame.events, "UNIT_HEALTH", case[1])
+        lu.assertEquals(Support.CueLook(frame), "none", "S48: switching back brought the cue back")
+        Support.FireEvent("UNIT_SPELLCAST_SUCCEEDED", "player", guid, Support.GREATER_HEAL)
+        Support.FireEvent("UNIT_SPELLCAST_STOP", "player", guid, Support.GREATER_HEAL)
+        Support.SetTime(Support.now + 1)
+        guid = self:ClickAndCast(frame)
+        lu.assertEquals(Support.CueLook(frame), "running", "S48: the next cast on the " .. case[1] .. " frame")
+        Support.FireEvent("UNIT_SPELLCAST_STOP", "player", guid, Support.GREATER_HEAL)
+    end
+end

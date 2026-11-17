@@ -191,6 +191,7 @@ local LAYOUT_SETTINGS = {
     { kind = "checkbox", key = "showAggro",          label = L.SHOW_AGGRO },
     { kind = "checkbox", key = "showLowMana",        label = L.SHOW_LOW_MANA },
     { kind = "checkbox", key = "showFiveSecond",     label = L.SHOW_FIVE_SECOND },
+    { kind = "checkbox", key = "showCancelCue",      label = L.SHOW_CANCEL_CUE },
     { kind = "checkbox", key = "showTooltips",       label = L.SHOW_TOOLTIPS },
     { kind = "checkbox", key = "showPets",           label = L.SHOW_PETS },
     { kind = "checkbox", key = "showTargetFrame",    label = L.SHOW_TARGET_FRAME },
@@ -209,6 +210,10 @@ local function SetLayoutSetting(key, value)
     local settings = NeoHeal.db.layout
     if settings[key] == value then return end
     settings[key] = value
+    -- The cancel cue hides at once when it is turned off, also in combat: it is
+    -- plain textures on plain frames, so nothing here waits for combat to end the way
+    -- the frame layout does (docs/features.md names this exception).
+    if key == "showCancelCue" and not value then NeoHeal.UnitButton.ClearCancelCue() end
     NeoHeal:RunOutOfCombat("layout", function() NeoHeal.Layout:Refresh() end)
 end
 

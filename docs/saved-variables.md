@@ -30,6 +30,7 @@ reaches existing installs automatically.
 | `showAggro` | `true` | |
 | `showLowMana` | `true` | healers: "OOM" over the health bar at 20% mana or less |
 | `showFiveSecond` | `true` | the five-second bar on the mana strip of every frame that shows you |
+| `showCancelCue` | `true` | the band on the frame you cast a heal on, red once the heal is no longer needed |
 | `showTooltips` | `true` | |
 | `showPets` | `false` | |
 | `showTargetFrame` | `false` | a frame for your target above the group frames, while it is friendly |

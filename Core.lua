@@ -28,6 +28,7 @@ local DEFAULTS = {
         showAggro = true,
         showLowMana = true,        -- healers: "OOM" over the health bar at 20% mana or less
         showFiveSecond = true,     -- your frame(s): a thin bar on the mana strip, draining over the 5 seconds after a cast
+        showCancelCue = true,      -- the frame you cast a heal on: a band that turns red once the heal is no longer needed
         showTooltips = true,
         showPets = false,
         showTargetFrame = false,   -- a frame for your target, above the group frames, while it is friendly
@@ -219,11 +220,48 @@ end
 function NeoHeal:UNIT_SPELLCAST_SUCCEEDED(unit, castGUID, spellID)
     if not self.db then return end   -- can fire while logging in
     self.UnitButton.OnPlayerCast(unit, castGUID, spellID)
+    -- A cast whose end the client reports only as its success: the cancel cue goes.
+    self.UnitButton.OnCastEnd(unit, castGUID)
 end
 
 function NeoHeal:UNIT_SPELLCAST_CHANNEL_START(unit, castGUID, spellID)
     if not self.db then return end
     self.UnitButton.OnPlayerCast(unit, castGUID, spellID)
+end
+
+-- The cancel cue (UnitButton.lua) hears your cast start and every way it can end.
+-- SUCCEEDED is already registered for the five-second bar above, so the same event
+-- reaches both: the bar starts, and the cue on the frame the cast was on goes. A
+-- cancelled or failed cast reports no SUCCEEDED, which is why the cue listens to
+-- all four ends; a channel's start and end are left out, so a channel never shows a
+-- cue and never takes a running one away. That Forever sends these events for your
+-- own casts, also in combat, is not checked in game (docs/forever-api.md, section 8).
+function NeoHeal:UNIT_SPELLCAST_START(unit, castGUID, spellID)
+    if not self.db then return end
+    self.UnitButton.OnCastStart(unit, castGUID, spellID)
+end
+
+function NeoHeal:UNIT_SPELLCAST_STOP(unit, castGUID)
+    if not self.db then return end
+    self.UnitButton.OnCastEnd(unit, castGUID)
+end
+
+function NeoHeal:UNIT_SPELLCAST_FAILED(unit, castGUID)
+    if not self.db then return end
+    self.UnitButton.OnCastEnd(unit, castGUID)
+end
+
+function NeoHeal:UNIT_SPELLCAST_INTERRUPTED(unit, castGUID)
+    if not self.db then return end
+    self.UnitButton.OnCastEnd(unit, castGUID)
+end
+
+-- A loading screen or a zone change (a portal, an instance) ends your cast without a
+-- documented end event, so every cue goes; it also covers a login and a reload. That
+-- the client sends no cast end there is not checked in game.
+function NeoHeal:PLAYER_ENTERING_WORLD()
+    if not self.db then return end
+    self.UnitButton.ClearCancelCue()
 end
 
 -- Ready check: answers show in the centre of each frame, and stay a few seconds
@@ -279,19 +317,22 @@ eventFrame:RegisterUnitEvent("UNIT_TARGET", "target")
 for _, event in ipairs({ "PLAYER_LOGIN", "PLAYER_REGEN_ENABLED", "PLAYER_REGEN_DISABLED", "GROUP_ROSTER_UPDATE", "SPELLS_CHANGED",
                          "UNIT_PET", "RAID_TARGET_UPDATE", "PLAYER_TARGET_CHANGED", "PARTY_LEADER_CHANGED",
                          "READY_CHECK", "READY_CHECK_CONFIRM", "READY_CHECK_FINISHED", "PLAYER_ROLES_ASSIGNED",
-                         "UPDATE_BINDINGS", "PLAYER_FOCUS_CHANGED" }) do
+                         "UPDATE_BINDINGS", "PLAYER_FOCUS_CHANGED", "PLAYER_ENTERING_WORLD" }) do
     -- Skip events this client doesn't know (registering one raises an error).
     if not C_EventUtils or C_EventUtils.IsEventValid(event) then
         eventFrame:RegisterEvent(event)
     end
 end
 
--- Your own casts, for the five-second bar: filtered to "player", as the unit a cast
--- belongs to may be a hidden value; the handler checks it too. This file already
--- needs RegisterUnitEvent for UNIT_TARGET above, so a client without it never loads
+-- Your own casts: the five-second bar (SUCCEEDED and CHANNEL_START) and the cancel
+-- cue (START and every end), filtered to "player", as the unit a cast belongs to may
+-- be a hidden value; the handlers check it too. This file already needs
+-- RegisterUnitEvent for UNIT_TARGET above, so a client without it never loads
 -- NeoHeal either way. That Forever fires these events, also in combat, is not
 -- checked in game.
-for _, event in ipairs({ "UNIT_SPELLCAST_SUCCEEDED", "UNIT_SPELLCAST_CHANNEL_START" }) do
+for _, event in ipairs({ "UNIT_SPELLCAST_SUCCEEDED", "UNIT_SPELLCAST_CHANNEL_START",
+                         "UNIT_SPELLCAST_START", "UNIT_SPELLCAST_STOP", "UNIT_SPELLCAST_FAILED",
+                         "UNIT_SPELLCAST_INTERRUPTED" }) do
     if not C_EventUtils or C_EventUtils.IsEventValid(event) then
         eventFrame:RegisterUnitEvent(event, "player")
     end

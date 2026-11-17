@@ -84,6 +84,7 @@ the range answer in combat, and whether it accepts every unit for it.
 | Health bar | Class colour (pets green), or green → yellow → red by health |
 | After the health fill | Incoming heals (light green), then the heal prediction of your left click (lighter green, or blue for a shield; frame under the mouse only), then shields/absorbs (pale blue) |
 | Empty part of health bar | Turns red below 35% health |
+| Bottom edge of the health bar | The cancel cue, while you cast a heal on this member from this frame: gold while the heal is still needed, red once the member is above 90% health |
 | Bottom strip | Resource bar (mana/rage/energy) for everyone, healers only, or nobody. Mana is a lighter blue than Blizzard's, which is too dark on a thin strip; rage, energy and focus keep the game's colours. On your own frame(s) also the five-second bar, on its bottom edge, while mana regeneration is off |
 | Top left | Name, cut off at the icons (no "...") |
 | Top right | Raid marker, role icon (main tank / main assist / tank / healer), leader crown or assist flag |
@@ -131,6 +132,33 @@ An action that costs no mana starts no bar and leaves a running one alone; so do
 cast that fails or is interrupted. What Forever tells the addon about your casts and
 their mana cost is not checked in game, and the 5-second rule itself comes from
 community sources, also not checked in game.
+
+**The cancel cue** ("Show cancel cue", on by default): while you cast a heal on a
+member from that member's frame, a 3 px band along the bottom of the frame's health
+bar tells you whether the heal is still needed. Gold while it is; red once the member
+is above 90% health, so you can cancel the cast and keep the mana (and keep the
+five-second rule from restarting). If their health drops back below 90%, the band is
+gold again. Exactly 90% counts as still needed. In test mode, one fake member (the
+druid Thornwood) shows the red band and the shaman Stormhoof the gold one.
+
+It shows only for a heal you start with a click or hover key on a NeoHeal frame, on
+the member you clicked, for the whole cast: cancelled, interrupted, failed or finished,
+it goes when the cast ends. A heal sent to that member's target, a group heal (Prayer
+of Healing, Chain Heal), a res, an instant or a channel show none, and neither does a
+cast started on your action bar or a macro. A second click while you cast leaves the
+cue where it is; a click the game queues for after your cast moves it when that cast
+starts. If the frame comes to show someone else during the cast (a target switch, a
+roster change) the cue goes, since the heal still lands on the member you clicked.
+
+It reads health the way the low-health tint does, through a colour curve, so it works
+in combat where health is hidden from addons: it compares the member with the fixed
+90% line, never with the size of your heal. A dead or offline member never shows red.
+
+Known limit, accepted: a click on a frame that starts no cast, followed within half a
+second by the same spell cast from outside NeoHeal on another member (any spell when
+the game hides that cast's details), shows the cue on the clicked frame until that
+cast ends. Which casts the addon hears, and in what order the cast events arrive, is
+not checked in game.
 
 HoTs tracked per class: Priest Renew + Power Word: Shield, Druid Rejuvenation +
 Regrowth. Other classes show no HoT icons.
@@ -312,9 +340,10 @@ Left column:
 
 Right column (checkboxes): show when solo, raid debuffs, missing buffs, HoT
 timers, incoming heals, left-click heal prediction, aggro, low mana, five-second
-rule, tooltips, pets, target frame, focus frame (both off by default), hide
+rule, cancel cue, tooltips, pets, target frame, focus frame (both off by default), hide
 Blizzard group frames (turning this off again needs a `/reload`).
 
 Changes made in combat are applied when combat ends. The window shows a red
-notice while that is the case. One exception: turning the five-second rule off
-takes its bar away at once, also in combat.
+notice while that is the case. Two exceptions: turning the five-second rule off
+takes its bar away at once, and turning the cancel cue off takes its band away at
+once, both also in combat.
