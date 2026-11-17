@@ -95,6 +95,15 @@ A wrong version, a version without notes, a missing or refused token, and an Int
 that CurseForge has no Forever version for all stop the run before anything is
 uploaded, and its log names the reason.
 
+The stops for the version, the notes, the project ID and the Forever version live in
+`spec/release.lua`: the workflow runs it before the packager, and `lua spec/run.lua`
+runs its checks too, through `spec/release_test.lua`. The token is checked by the
+workflow step before it.
+
+The project ID lives in `NeoHeal.toc`, as `## X-Curse-Project-ID: 1726356`, and the
+packager uploads to the project that line names. `spec/release.lua` holds the same
+number and stops the release when the toc names another.
+
 **When a run fails, how to fix it depends on where the cause is.**
 
 - The token, CurseForge's version list, or the network: check NeoHeal's files page on
