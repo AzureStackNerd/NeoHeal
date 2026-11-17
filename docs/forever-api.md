@@ -225,9 +225,11 @@ and a cast started from an action bar or a macro shows none.
 Blizzard's generated docs (`UnitDocumentation.lua` on the forever branch of
 [Gethe/wow-ui-source](https://github.com/Gethe/wow-ui-source)) mark the whole payload
 `SecretWhenUnitSpellCastRestricted`; their 12.0.0 notes and the brief research in the
-cancel-cue backlog item say your own casts are readable, also in combat. That Forever
-behaves that way is **not checked in game**, and neither are three things the cue rests
-on: that a hover key's virtual-button click reaches the button's `PreClick` hook, that
+cancel-cue backlog item say your own casts are readable, also in combat. Checked in
+game on 2026-11-17: in combat, `C_Secrets.ShouldUnitSpellCastingBeSecret("player")` and
+`C_Secrets.ShouldUnitSpellCastBeSecret("player", "Heal")` both return `false`, and the
+cue showed on your own frame and went with a cancelled cast. Three things the cue rests
+on are **not checked in game**: that a hover key's virtual-button click reaches the button's `PreClick` hook, that
 the client's spell queue starts a queued cast within half a second of the click, and
 whether a cast's end arrives before or after a following cast's start. NeoHeal handles
 a hidden GUID, spell ID or unit by falling back to the click that is still fresh, and
