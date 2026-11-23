@@ -115,7 +115,12 @@ nothing else: LuaUnit is included as `spec/luaunit.lua`. The game never loads
   reads, and its heal and shield bars on hover, with Weakened Soul and hidden
   auras, Power Word: Shield told apart from a shield that only goes on you and
   the frames each shows on, a heal that only goes on you on the frames it shows
-  on (and an unnamed spell or unreadable class taking those same frames), and
+  on (and an unnamed spell or unreadable class taking those same frames), a group
+  heal around you on the frames of your group only (a party by its token, a raid
+  by the roster's subgroups, a pet and an NPC none, a hidden or partial answer
+  none, your own raid frame still following the group numbers where the game hides
+  whether a frame is you, and the moments that redraw it: a modifier, a target or
+  focus change, a roster change, a move to another group), and
   where each bar is anchored; `Support.FakeBar` records a bar and
   `Support.FakeButton` holds a button's bars), clicks
   with modifiers (`RES_SNIPPET` runs as plain Lua with fakes for the secure

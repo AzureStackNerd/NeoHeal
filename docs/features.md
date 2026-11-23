@@ -307,6 +307,32 @@ heal is not checked in game, and a heal it misses shows on other frames. A heal 
 any friendly unit, such as Flash Heal, keeps its bars on every frame, unless
 NeoHeal can't tell it apart either.
 
+A group heal you cast around yourself, such as a Priest's Prayer of Healing, heals
+your party, in a raid your own group, so its green bars show only on the frames of
+the members of your group: your own frame, a party member's frame in a party, in a
+raid your own raid frame and the frames of the members of your own group, and the
+target or focus frame while it shows one of them. A raid member outside your group,
+a pet, or a target or focus frame on someone outside your group shows none. That
+Prayer of Healing heals your party and your own group, and not a pet, is not
+checked in game; if it does reach a pet, a bar missing there is the safe side. A
+member of your group out of the heal's reach (30 yards around you as far as known,
+not checked in game) keeps its bars: the frame's range fade is the only sign that
+the heal may not land.
+
+Where the game hides whether a frame shows a member of your group, or gives only
+part of that answer, the bars show none there: a heal that may not land on that
+frame is not predicted. Where it hides only whether a frame shows you, a raid's
+group numbers decide: your own raid frame and a target or focus frame on you keep
+their bars in a raid, while outside a raid a target or focus frame on you shows
+none. Your own frame and a party member's frame in a party keep their bars whatever
+the game hides about your group, since a party is your group. A heal NeoHeal can't
+tell from a group heal, such as when the game gives no name for it or no class,
+shows only on a frame that shows you, as the heals above do, so party1's frame shows
+none then. The list of group heals NeoHeal knows is per class, as the list of heals
+that only go on you is; Holy Nova, a Priest's other group heal around you, is not on
+it, so it goes on others and keeps its bars on every frame unless NeoHeal can't tell
+it apart, as it did (bug #22).
+
 Nothing shows when the left click:
 
 - does something other than cast a spell (Target, menu, missing buff), or casts on

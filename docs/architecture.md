@@ -262,17 +262,30 @@ charDB.bindings["shift-2"] = { action="spell", spellID=139, highestRank=true, ta
   else `UnitIsUnit`) and refuses while an aura of the shield's own name is up. A
   hidden aura, a hidden name or a hidden `UnitIsUnit` refuses. That the other
   absorbs only go on you is not checked in game. A heal is drawn unless
-  `CanTakeHeal` says it would not land there: `HealGoesOnOthers` reads the clicked
-  spell's name and the names of the ids `SELF_ONLY_HEALS` lists for your class (one
-  group of ids per spell, so every rank matches; a Priest's Desperate Prayer is
-  13908 and 19236, not checked in game), and only a readable clicked name that is
-  none of them goes on others. The names are read on every draw, never cached: a
-  cache would keep a nil from the first draw and treat the spell as landing on
-  others. `UnitClass` is read first and a nil or secret class counts as one it
-  can't tell, because a hidden value may not be a table key; a class the list does
-  not name has an empty list, so its heals go on others. A heal it can't tell, and
-  a heal that only goes on you, then takes `ShowsThePlayer`: bars on a frame that
-  shows you, none on another member's frame, as a self-only shield. The shields come after them. `AnchorAmountBars` starts each shown bar at the end
+  `CanTakeHeal` says it would not land there. `HealTargets` reads the clicked
+  spell's name, the class, and every name the ids of two per-class lists give, one
+  group of ids per spell so every rank matches: `SELF_ONLY_HEALS` (a Priest's
+  Desperate Prayer, 13908 and 19236) and `YOUR_GROUP_HEALS` (Prayer of Healing, 596;
+  both not checked in game), and answers `"group"`, `"you"`, `"others"` or nil. A
+  clicked name on the group list is `"group"`, on the self-only list `"you"`, and
+  any other readable name `"others"`; every other answer is nil, and nil takes the
+  safe side with `"you"`. The names are read on every draw, never cached: a cache
+  would keep a nil from the first draw and treat the spell as landing on others.
+  Both lists are read before the name is matched, and a group of which no id gives a
+  name makes the answer nil, so a heal compared with a spell the game doesn't name
+  is one NeoHeal can't place. `UnitClass` is read first and a nil or secret class
+  counts as one it can't tell, because a hidden value may not be a table key; a
+  class the lists do not name has empty lists, so its heals go on others. A heal it
+  can't tell, and a heal that only goes on you, then takes `ShowsThePlayer`: bars on
+  a frame that shows you, none on another member's frame, as a self-only shield. A
+  `"group"` heal takes `InYourGroup` instead: `ShowsThePlayer` yes; a pet token
+  (pet, partypetN, raidpetN) no, since a raid pet's index would read as its owner's
+  group; a partyN frame outside a raid yes by its token, a party being group 1; a
+  target or focus frame only after `IsTrue(UnitIsPlayer)`, so a pet or an NPC shows
+  none; then in a raid the two `UnitInRaid` indexes and the two roster subgroups,
+  each non-nil and not secret before they are compared and then equal, and outside a
+  raid `UnitIsUnit` against each `partyn`. Every hidden, nil or partly given answer
+  is no. The shields come after them. `AnchorAmountBars` starts each shown bar at the end
   of the last shown one, skipping hidden bars (in game a hidden, emptied bar
   kept its old fill width: [forever-api.md](forever-api.md), section 5).
   `UpdateHealth` and `UpdateAuras` redraw it, and while the mouse is over a

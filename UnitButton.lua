@@ -259,23 +259,26 @@ local SELF_ONLY_HEALS = {
     PRIEST = { { 13908, 19236 } },
 }
 
--- Whether a heal on the left click would land on someone other than you, which is
--- only known when the clicked spell's name is readable and so is a name of every
--- group the list holds for your class, and the clicked name is none of them. The
--- class comes first because a hidden value may not be used as a table key
--- (UnitClass can give nothing, or a secret: docs/forever-api.md, section 2); a
--- class the list has no entry for has an empty list, so its heals land on others (a
--- Shaman's Chain Heal). Every name a group's ids give is collected, never only the
--- first: an id that names another spell on Forever would otherwise keep the
--- self-only spell's own name out of the list. False when that can't be told: a heal
--- that may not land on the frame is not predicted, like a shield that may not land.
-local function HealGoesOnOthers(spellID)
-    local name = C_Spell.GetSpellName(spellID)
-    if IsSecret(name) or not name then return false end
-    local _, class = UnitClass("player")
-    if IsSecret(class) or not class then return false end
+-- Heals that go on your group around you (a Priest's Prayer of Healing): per class, one
+-- group of ids per spell, turned into names at run time as SELF_ONLY_HEALS is, so every
+-- rank matches by name. They heal you, your party, and in a raid your own group, not
+-- whoever is behind the frame you clicked (as far as known; not checked in game). 596's
+-- only source is ClickCast.lua's GROUP_HEALS, whose ids are "Classic-era's, not checked
+-- in game": an id the game gives no name for takes every heal of the class to the safe
+-- side (HealTargets), and an id that names another spell hands that spell this rule.
+-- That the list holds every group heal cast around you is not checked in game.
+local YOUR_GROUP_HEALS = {
+    PRIEST = { { 596 } },
+}
+
+-- Every name the ids of these groups give, or nil when a group gives none: a group whose
+-- ids the game names not at all tells nothing, so a heal compared with it is one NeoHeal
+-- can't place. Every name a group's ids give is collected, never only the first: an id
+-- that names another spell on Forever would otherwise keep the spell's own name out of
+-- the set, and collecting it too only takes bars away, never shows a wrong one.
+local function HealNames(groups)
     local names = {}
-    for _, group in ipairs(SELF_ONLY_HEALS[class] or {}) do
+    for _, group in ipairs(groups) do
         local named
         for _, listedID in ipairs(group) do
             local listed = C_Spell.GetSpellName(listedID)
@@ -284,16 +287,75 @@ local function HealGoesOnOthers(spellID)
                 named = true
             end
         end
-        if not named then return false end
+        if not named then return nil end
     end
-    return not names[name]
+    return names
 end
 
--- Whether a heal cast with this spell shows on this frame: one that goes on any
--- friendly unit on every frame, a heal that only goes on you only where the frame
--- shows you (ShowsThePlayer).
+-- What a heal on the left click does, as far as NeoHeal can tell: "group" (it goes on
+-- your group around you, a Priest's Prayer of Healing), "you" (it goes only on you) or
+-- "others" (on any friendly unit), and nil when it can't be told. The class comes first
+-- because a hidden value may not be used as a table key (UnitClass can give nothing, or
+-- a secret: docs/forever-api.md, section 2); a class the lists have no entry for has
+-- empty lists, so its heals go on others (a Shaman's Chain Heal). Both lists' names are
+-- collected before the clicked name is looked up, and an unnamed group anywhere makes
+-- the answer nil: #20's own order, so a heal compared with a spell the game doesn't name
+-- takes the safe side. The names are read on every draw, never cached, as #20's are.
+local function HealTargets(spellID)
+    local name = C_Spell.GetSpellName(spellID)
+    if IsSecret(name) or not name then return nil end
+    local _, class = UnitClass("player")
+    if IsSecret(class) or not class then return nil end
+    local groupNames = HealNames(YOUR_GROUP_HEALS[class] or {})
+    local selfNames = HealNames(SELF_ONLY_HEALS[class] or {})
+    if not groupNames or not selfNames then return nil end
+    if groupNames[name] then return "group" end
+    if selfNames[name] then return "you" end
+    return "others"
+end
+
+-- Whether a unit's frame shows a member of your group: you, or in a raid a member of your
+-- own group, and no one else. The group comes from the raid roster's subgroup numbers and
+-- never from the frame's token alone, except a party's: outside a raid the party is group
+-- 1, so a partyN frame shows your party whatever the game hides. Every answer that is
+-- hidden, nil or only partly given is no, the safe side #12 and #20 took: a heal that may
+-- not land on the frame is not predicted. The pet tokens come first because a raid pet is
+-- a raid unit with an index, and its index would read as its owner's group; a target or
+-- focus frame must show a player at all, or it may be on a pet or an NPC. A target or
+-- focus frame whose "is it you" answer is hidden still follows the group numbers, as a
+-- raid frame does. What UnitInRaid answers for a raid pet, and whether the roster is
+-- readable in combat, are not checked in game.
+local PET_UNITS = { pet = true, partypet = true, raidpet = true }
+
+local function InYourGroup(unit)
+    if ShowsThePlayer(unit) then return true end
+    if PET_UNITS[unit:match("^([%a]+)%d*$")] then return false end
+    local isTargetOrFocus = unit == "target" or unit == "focus"
+    if isTargetOrFocus and not IsTrue(UnitIsPlayer(unit)) then return false end
+    if not IsInRaid() then
+        if not isTargetOrFocus and unit:match("^party%d+$") then return true end
+        for index = 1, GetNumSubgroupMembers() do
+            if IsTrue(UnitIsUnit(unit, "party" .. index)) then return true end
+        end
+        return false
+    end
+    local mine, theirs = UnitInRaid("player"), UnitInRaid(unit)
+    if IsSecret(mine) or not mine or IsSecret(theirs) or not theirs then return false end
+    local _, _, myGroup = GetRaidRosterInfo(mine)
+    local _, _, theirGroup = GetRaidRosterInfo(theirs)
+    if IsSecret(myGroup) or not myGroup or IsSecret(theirGroup) or not theirGroup then return false end
+    return myGroup == theirGroup
+end
+
+-- Whether a heal cast with this spell shows on this frame: one that goes on any friendly
+-- unit on every frame, one that goes on your group only on a frame of your group
+-- (InYourGroup), and a heal that only goes on you, or that can't be told apart, only
+-- where the frame shows you (ShowsThePlayer).
 local function CanTakeHeal(unit, spellID)
-    return HealGoesOnOthers(spellID) or ShowsThePlayer(unit)
+    local targets = HealTargets(spellID)
+    if targets == "others" then return true end
+    if targets == "group" then return InYourGroup(unit) end
+    return ShowsThePlayer(unit)
 end
 
 -- Heal prediction: what your left click, with the modifiers held now, would heal
@@ -302,8 +364,9 @@ end
 -- lighter than incoming heals; the rest of the range up to the highest amount,
 -- which it may reach, in the same green but fainter. A shield on the left click
 -- shows its absorb instead, in the blue of the tooltip, where that shield would
--- land (CanTakeShield). A heal that only goes on you shows its bars only where the
--- frame shows you (CanTakeHeal). The amounts are plain numbers, so heals show in
+-- land (CanTakeShield). A heal that goes on your group shows its bars only on a
+-- frame of your group, and a heal that only goes on you only where the frame shows
+-- you (CanTakeHeal). The amounts are plain numbers, so heals show in
 -- combat too (seen in game on 2026-10-04): the StatusBar places them against the
 -- secret maximum.
 local function UpdateHealPrediction(button)

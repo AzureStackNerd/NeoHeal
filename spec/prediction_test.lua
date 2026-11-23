@@ -950,17 +950,296 @@ function TestHealPrediction:testAHealOnAnyFriendlyUnitShowsOnEveryFrame()
     end
 end
 
--- AC3, S13: Prayer of Healing on every frame, in and out of combat, as today.
-function TestHealPrediction:testAGroupHealYouCastOnYourselfShowsAsToday()
-    Support.SetDescription(Support.PRAYER_OF_HEALING, PRAYER_OF_HEALING_TEXT)
-    self.ns.charDB.bindings["1"] = Spell(Support.PRAYER_OF_HEALING, false)
-    local group = { 312, 333 - 312 }
-    for _, combat in ipairs({ "out of combat", "in combat" }) do
-        if combat == "in combat" then EnterCombat() end
-        for _, unit in ipairs({ "player", "party1", "raid12" }) do
-            lu.assertEquals(self:HealOn(unit), group, unit .. ", " .. combat)
-        end
+-- Which frames a group heal cast around you shows on (issue #21): your own, a party
+-- member's in a party, in a raid your own group's, and the target or focus frame on
+-- one of them; none on a raid member outside your group, a pet, or anyone else.
+-- Prayer of Healing stands in for that heal, Chain Heal for a group heal that lands on
+-- the member you click. The descriptions and amounts are the fake's, not the game's;
+-- that Prayer of Healing heals your party, in a raid your own group, is not checked
+-- in game.
+local PRAYER_OF_HEALING, CHAIN_HEAL = Support.PRAYER_OF_HEALING, Support.CHAIN_HEAL
+local CHAIN_HEAL_TEXT = "Heals the friendly target for 320 to 368, then jumps to heal nearby targets."
+local GROUP = { 312, 333 - 312 }
+local CHAIN = { 320, 368 - 320 }
+
+local function BindPrayerOfHealing(bindings, key)
+    Support.SetDescription(PRAYER_OF_HEALING, PRAYER_OF_HEALING_TEXT)
+    bindings[key or "1"] = Spell(PRAYER_OF_HEALING, false)
+end
+
+-- The game's issecretvalue for this file's group rows: a Support.Secret is hidden.
+local function IsHidden(value) return value ~= nil and Support.hidden[value] == true end
+
+-- Your group as the game gives it, read live, so a test changes `world` after the
+-- call. `party`: how many others are in your party (GetNumSubgroupMembers). `raid`:
+-- each unit's raid index (UnitInRaid), nil outside a raid; `groups`: each index's
+-- group (GetRaidRosterInfo's third return), an index without one gives nothing.
+-- `is`: whom a frame shows besides itself (UnitIsUnit), or `isHidden`, the hidden
+-- answer UnitIsUnit then gives for everything. `players`: the units UnitIsPlayer says
+-- yes for. Any answer may be a Support.Secret; GetRaidRosterInfo reads a hidden index
+-- as the index it stands for, so only a check on the index keeps it out. Without an
+-- index it raises, as IsPlayerSpell's fake does for a missing spell id; what the game's
+-- GetRaidRosterInfo does without one is not checked in game.
+local function Group(world)
+    IsInRaid = function() return world.raid ~= nil end
+    GetNumSubgroupMembers = function() return world.party or 0 end
+    UnitInRaid = function(unit) return world.raid and world.raid[unit] end
+    GetRaidRosterInfo = function(index)
+        assert(type(Support.Reveal(index)) == "number", "GetRaidRosterInfo needs a raid index")
+        local group = world.groups and world.groups[Support.Reveal(index)]
+        if group == nil then return nil end
+        return "Someone", 0, group
     end
+    UnitIsUnit = function(a, b)
+        if world.isHidden then return world.isHidden end
+        return a == b or (world.is or {})[a] == b
+    end
+    UnitIsPlayer = function(unit) return (world.players or {})[unit] == true end
+    return world
+end
+
+-- A raid: you are raid3; raid1, raid2 and raid3 are group 1, raid5 and raid12 group 2.
+local function Raid()
+    return { raid = { player = 3, raid1 = 1, raid2 = 2, raid3 = 3, raid5 = 5, raid12 = 12 },
+             groups = { [1] = 1, [2] = 1, [3] = 1, [5] = 2, [12] = 2 },
+             is = { raid3 = "player" },
+             players = { player = true, raid1 = true, raid2 = true, raid3 = true, raid5 = true, raid12 = true } }
+end
+
+-- AC1, S1, S2, S3, S4, S6 and S7: solo, in a party and in a raid. The main tanks are a
+-- group header's frames too, so they carry raidN tokens like the group frames (by the
+-- header's group filter; not checked in game).
+function TestHealPrediction:testAGroupHealAroundYouShowsOnlyOnTheFramesOfYourGroup()
+    BindPrayerOfHealing(self.ns.charDB.bindings)
+    local world = Group({ is = { target = "player" }, players = { player = true, target = true, focus = true } })
+    lu.assertEquals(self:HealOn("player"), GROUP, "solo, your own frame")
+    lu.assertEquals(self:HealOn("target"), GROUP, "solo, the target frame on you")
+    lu.assertEquals(self:HealOn("focus"), HIDDEN, "solo, the focus frame on another player")
+    world.players.focus = false
+    lu.assertEquals(self:HealOn("focus"), HIDDEN, "solo, the focus frame on a friendly NPC")
+
+    world = Group({ party = 2, is = { target = "party2", focus = "player" },
+                    players = { player = true, party1 = true, party2 = true, target = true, focus = true } })
+    lu.assertEquals(self:HealOn("player"), GROUP, "in a party, your own frame")
+    lu.assertEquals(self:HealOn("party1"), GROUP, "in a party, party1")
+    lu.assertEquals(self:HealOn("party2"), GROUP, "in a party, party2")
+    lu.assertEquals(self:HealOn("target"), GROUP, "in a party, the target frame on party2")
+    lu.assertEquals(self:HealOn("focus"), GROUP, "in a party, the focus frame on you")
+    world.is.target = nil
+    lu.assertEquals(self:HealOn("target"), HIDDEN, "in a party, the target frame on a player outside it")
+    world.players.target = false
+    lu.assertEquals(self:HealOn("target"), HIDDEN, "in a party, the target frame on a friendly NPC")
+
+    world = Group(Raid())
+    lu.assertEquals(self:HealOn("player"), GROUP, "in a raid, your own frame")
+    lu.assertEquals(self:HealOn("raid3"), GROUP, "in a raid, your own raid frame")
+    lu.assertEquals(self:HealOn("raid1"), GROUP, "in a raid, raid1 of your group")
+    lu.assertEquals(self:HealOn("raid2"), GROUP, "in a raid, raid2 of your group")
+    lu.assertEquals(self:HealOn("raid5"), HIDDEN, "in a raid, raid5 of another group")
+    lu.assertEquals(self:HealOn("raid12"), HIDDEN, "in a raid, raid12 of another group")
+    world.raid.target, world.players.target = 2, true
+    lu.assertEquals(self:HealOn("target"), GROUP, "in a raid, the target frame on raid2 of your group")
+    world.raid.focus, world.players.focus = 5, true
+    lu.assertEquals(self:HealOn("focus"), HIDDEN, "in a raid, the focus frame on raid5 of another group")
+    world.raid.target = nil
+    lu.assertEquals(self:HealOn("target"), HIDDEN, "in a raid, the target frame on a player outside the raid")
+    world.players.target = false
+    lu.assertEquals(self:HealOn("target"), HIDDEN, "in a raid, the target frame on a friendly NPC")
+end
+
+-- AC1, S5: a pet's frame shows none. Every other answer puts each pet in your group,
+-- so only its token (or, on the target or focus frame, UnitIsPlayer) keeps the bars
+-- off: in a raid UnitInRaid gives a pet its owner's index, here one in your group
+-- (that the game does so is not checked in game); in a party the fake's UnitIsUnit
+-- says each pet shows party1. raid1 and party1 are the controls: the same world shows
+-- their bars.
+function TestHealPrediction:testAGroupHealAroundYouShowsNothingOnAPet()
+    BindPrayerOfHealing(self.ns.charDB.bindings)
+    local world = Raid()
+    world.raid.pet, world.raid.raidpet1, world.raid.partypet1 = 3, 1, 2
+    world.raid.target, world.raid.focus = 1, 3   -- on raid1's pet and on yours
+    Group(world)
+    lu.assertEquals(self:HealOn("raid1"), GROUP, "in a raid, raid1 (the control)")
+    for _, unit in ipairs({ "pet", "raidpet1", "partypet1", "target", "focus" }) do
+        lu.assertEquals(self:HealOn(unit), HIDDEN, "in a raid, " .. unit)
+    end
+
+    self:setUp()
+    BindPrayerOfHealing(self.ns.charDB.bindings)
+    Group({ party = 1, is = { pet = "party1", partypet1 = "party1" }, players = { player = true, party1 = true } })
+    lu.assertEquals(self:HealOn("party1"), GROUP, "in a party, party1 (the control)")
+    lu.assertEquals(self:HealOn("pet"), HIDDEN, "in a party, your pet")
+    lu.assertEquals(self:HealOn("partypet1"), HIDDEN, "in a party, party1's pet")
+end
+
+-- AC1, S8: where the game hides who is in your group, or gives only part of it, the
+-- frame shows none; where it hides only whether a frame shows you, a raid's group
+-- numbers decide (the stakeholder's answer at gate 2). Each case hides or leaves out
+-- one answer; raid1, the control, shows its bars where nothing is hidden.
+function TestHealPrediction:testAGroupHealAroundYouShowsNothingWhereTheGameHidesYourGroup()
+    local cases = {
+        { "your raid index hidden", function(w) w.raid.player = Support.Secret("your raid index", 3) end },
+        { "raid1's raid index hidden", function(w) w.raid.raid1 = Support.Secret("raid1's raid index", 1) end },
+        { "your group hidden", function(w) w.groups[3] = Support.Secret("your group", 1) end },
+        { "raid1's group hidden", function(w) w.groups[1] = Support.Secret("raid1's group", 1) end },
+        { "no raid index for you", function(w) w.raid.player = nil end },
+        { "no raid index for raid1", function(w) w.raid.raid1 = nil end },
+        { "no group for you", function(w) w.groups[3] = nil end },
+        { "no group for raid1", function(w) w.groups[1] = nil end },
+        { "no group for either", function(w) w.groups[1], w.groups[3] = nil, nil end },
+        -- One hidden value for both: Lua finds a value equal to itself without asking it,
+        -- so only the checks on the hidden groups keep the bars off. With one group hidden
+        -- the comparison gives no on its own, as the game's does: a hidden value equals
+        -- nothing (docs/forever-api.md, section 2).
+        { "both groups hidden", function(w)
+            local hidden = Support.Secret("both groups", 1)
+            w.groups[1], w.groups[3] = hidden, hidden
+        end },
+    }
+    for _, combat in ipairs({ "out of combat", "in combat" }) do
+        local function Fresh()
+            self:setUp(IsHidden)
+            BindPrayerOfHealing(self.ns.charDB.bindings)
+            if combat == "in combat" then EnterCombat() end
+            return Group(Raid())
+        end
+        Fresh()
+        lu.assertEquals(self:HealOn("raid1"), GROUP, "nothing hidden, raid1, " .. combat)
+        for _, case in ipairs(cases) do
+            case[2](Fresh())
+            local drawn, shown = pcall(self.HealOn, self, "raid1")
+            lu.assertTrue(drawn, case[1] .. ", raid1, " .. combat .. ": the hover raised " .. tostring(shown))
+            lu.assertEquals(shown, HIDDEN, case[1] .. ", raid1, " .. combat)
+        end
+
+        -- Only whether a frame shows you hidden, in a raid: the group numbers decide.
+        local world = Fresh()
+        world.isHidden = Support.Secret("is it you", true)
+        world.raid.target, world.players.target = 3, true
+        lu.assertEquals(self:HealOn("raid3"), GROUP, "'is it you' hidden, your own raid frame, " .. combat)
+        lu.assertEquals(self:HealOn("target"), GROUP, "'is it you' hidden, the target frame on you, " .. combat)
+        lu.assertEquals(self:HealOn("raid1"), GROUP, "'is it you' hidden, raid1, " .. combat)
+        lu.assertEquals(self:HealOn("raid5"), HIDDEN, "'is it you' hidden, raid5, " .. combat)
+
+        -- The same in a party: no group numbers, so a target on you shows none, while
+        -- your own frame and party1's keep theirs.
+        world = Fresh()
+        world.raid, world.groups, world.party = nil, nil, 1
+        world.isHidden = Support.Secret("is it you", true)
+        world.players.target = true
+        lu.assertEquals(self:HealOn("player"), GROUP, "in a party, 'is it you' hidden, your own frame, " .. combat)
+        lu.assertEquals(self:HealOn("party1"), GROUP, "in a party, 'is it you' hidden, party1, " .. combat)
+        lu.assertEquals(self:HealOn("target"), HIDDEN, "in a party, 'is it you' hidden, the target frame, " .. combat)
+
+        -- Both hidden in a raid: your own raid frame shows none too.
+        world = Fresh()
+        world.isHidden = Support.Secret("is it you", true)
+        world.raid.player = Support.Secret("your raid index", 3)
+        lu.assertEquals(self:HealOn("raid3"), HIDDEN, "all hidden, your own raid frame, " .. combat)
+        lu.assertEquals(self:HealOn("player"), GROUP, "all hidden, your own frame, " .. combat)
+    end
+end
+
+-- AC1, S9, and #20's AC3 row it replaces ("a group heal you cast on yourself shows as
+-- today"), whose raid12 outside your group now shows none: in and out of combat.
+-- That the game hides none of these answers in combat is not checked in game.
+function TestHealPrediction:testAGroupHealAroundYouShowsOnlyOnTheFramesOfYourGroupInCombat()
+    for _, combat in ipairs({ "out of combat", "in combat" }) do
+        self:setUp()
+        BindPrayerOfHealing(self.ns.charDB.bindings)
+        if combat == "in combat" then EnterCombat() end
+        Group({ party = 1 })
+        lu.assertEquals(self:HealOn("player"), GROUP, "in a party, your own frame, " .. combat)
+        lu.assertEquals(self:HealOn("party1"), GROUP, "in a party, party1, " .. combat)
+        Group(Raid())
+        lu.assertEquals(self:HealOn("player"), GROUP, "in a raid, your own frame, " .. combat)
+        lu.assertEquals(self:HealOn("raid1"), GROUP, "in a raid, raid1 of your group, " .. combat)
+        lu.assertEquals(self:HealOn("raid12"), HIDDEN, "in a raid, raid12 of another group, " .. combat)
+    end
+end
+
+-- AC2, S10: Prayer of Healing on Shift + left click, Flash Heal on the plain left click.
+function TestHealPrediction:testAGroupHealOnAModifierFollowsTheModifierAndTheFrame()
+    BindPrayerOfHealing(self.ns.charDB.bindings, "shift-1")
+    self.ns.charDB.bindings["1"] = Spell(FLASH_HEAL[7], false)
+    Group(Raid())
+    self.button = Support.FakeButton("raid5")
+    self.UnitButton.OnEnter(self.button)
+    lu.assertEquals(self:Bars(), FLASH, "raid5 of another group")
+    PressModifiers({ shift = true })
+    lu.assertEquals(self:Bars(), HIDDEN, "raid5 with Shift")
+    self.UnitButton.OnLeave(self.button)
+    self.button = Support.FakeButton("raid1")
+    self.UnitButton.OnEnter(self.button)
+    lu.assertEquals(self:Bars(), GROUP, "raid1 of your group with Shift")
+    PressModifiers({})
+    lu.assertEquals(self:Bars(), FLASH, "Shift released")
+end
+
+-- AC5, S16: Chain Heal lands on the member you click, so it shows on every frame of
+-- S1 to S8, also where the game hides who is you and your raid index.
+function TestHealPrediction:testAGroupHealCastOnTheClickedMemberShowsOnEveryFrame()
+    for _, hidden in ipairs({ false, true }) do
+        self:setUp(IsHidden)
+        UnitClass = function() return "Shaman", "SHAMAN" end
+        Support.SetKnown({ CHAIN_HEAL })
+        Support.SetDescription(CHAIN_HEAL, CHAIN_HEAL_TEXT)
+        self.ns.charDB.bindings["1"] = Spell(CHAIN_HEAL, false)
+        local world = Raid()
+        world.raid.pet, world.raid.raidpet1, world.raid.target = 3, 1, 1
+        if hidden then
+            world.isHidden = Support.Secret("is it you", true)
+            world.raid.player = Support.Secret("your raid index", 3)
+        end
+        Group(world)
+        local label = hidden and ", hidden" or ""
+        for _, unit in ipairs({ "player", "raid3", "raid1", "raid5", "raid12", "pet", "raidpet1", "partypet1",
+                                "target", "focus" }) do
+            lu.assertEquals(self:HealOn(unit), CHAIN, unit .. label)
+        end
+        Group({ party = 1 })
+        lu.assertEquals(self:HealOn("party1"), CHAIN, "in a party, party1" .. label)
+    end
+end
+
+-- AC5, S18: a heal NeoHeal can't tell from a group heal shows only on a frame that
+-- shows you: Flash Heal while Prayer of Healing gives no name; Prayer of Healing
+-- without a name of its own, without a class, or while both of Desperate Prayer's
+-- ids give no name (#20's order: an unnamed listed heal is "can't tell").
+function TestHealPrediction:testAHealThatCantBeToldFromAGroupHealShowsOnlyOnAFrameThatShowsYou()
+    Group({ party = 1 })
+    NameSpells({ PRAYER_OF_HEALING })
+    lu.assertEquals(self:HealOn("player"), FLASH, "Prayer of Healing unnamed, Flash Heal on your own frame")
+    lu.assertEquals(self:HealOn("party1"), HIDDEN, "Prayer of Healing unnamed, Flash Heal on party1")
+
+    local cases = {
+        { "Prayer of Healing unnamed", function() NameSpells({ PRAYER_OF_HEALING }) end },
+        { "no class", function() UnitClass = function() return nil end end },
+        { "Desperate Prayer unnamed", function() NameSpells({ DESPERATE_PRAYER, DESPERATE_PRAYER_2 }) end },
+    }
+    for _, case in ipairs(cases) do
+        self:setUp()
+        BindPrayerOfHealing(self.ns.charDB.bindings)
+        Group({ party = 1 })
+        case[2]()
+        lu.assertEquals(self:HealOn("player"), GROUP, case[1] .. ", Prayer of Healing on your own frame")
+        lu.assertEquals(self:HealOn("party1"), HIDDEN, case[1] .. ", Prayer of Healing on party1")
+    end
+end
+
+-- AC5, S19: the answer follows the name the game gives now, never one it failed to
+-- give at an earlier hover; Prayer of Healing itself too, after a draw that found no
+-- name for it.
+function TestHealPrediction:testAGroupHealsNameGivenLateCountsFromTheNextHover()
+    Group({ party = 1 })
+    local getName = NameSpells({ PRAYER_OF_HEALING })
+    lu.assertEquals(self:HealOn("party1"), HIDDEN, "no name yet, Flash Heal on party1")
+    C_Spell.GetSpellName = getName
+    lu.assertEquals(self:HealOn("party1"), FLASH, "named now, Flash Heal on party1")
+    BindPrayerOfHealing(self.ns.charDB.bindings)
+    Group(Raid())
+    lu.assertEquals(self:HealOn("raid5"), HIDDEN, "named now, Prayer of Healing on raid5 of another group")
+    lu.assertEquals(self:HealOn("raid1"), GROUP, "named now, Prayer of Healing on raid1 of your group")
 end
 
 -- The heal bars of the hovered wide button.
@@ -997,4 +1276,95 @@ function TestShieldRedraws:testTheHealFollowsARosterChangeUnderTheMouse()
     self.you.raid3 = true
     self.ns:GROUP_ROSTER_UPDATE()
     lu.assertEquals(self:Bars(), PRAYER, "you again")
+end
+
+-- Prayer of Healing on the left click in a raid for the redraw rows: you are raid3;
+-- raid1 to raid3 are group 1, raid5 group 2. Returns the raid index per unit and the
+-- group per index, which a test changes; the fakes read them live. The target and
+-- focus frames show players.
+function TestShieldRedraws:Raid()
+    local index = { player = 3, raid1 = 1, raid2 = 2, raid3 = 3, raid5 = 5 }
+    local groups = { [1] = 1, [2] = 1, [3] = 1, [5] = 2 }
+    Override("IsInRaid", function() return true end)
+    Override("UnitInRaid", function(unit) return index[unit] end)
+    Override("GetRaidRosterInfo", function(i)
+        if groups[i] == nil then return nil end
+        return "Someone", 0, groups[i]
+    end)
+    Override("UnitIsPlayer", function(unit) return unit == "target" or unit == "focus" end)
+    -- A player's frame takes its class colour when it redraws.
+    Override("RAID_CLASS_COLORS", setmetatable({}, { __index = function() return { r = 1, g = 1, b = 1 } end }))
+    BindPrayerOfHealing(self.ns.charDB.bindings)
+    return index, groups
+end
+
+-- AC2, S11: the target or focus frame changes from a member of your group to one of
+-- another group and back, the mouse staying on it.
+function TestShieldRedraws:testTheGroupHealFollowsTheTargetOrFocusUnderTheMouse()
+    local index = self:Raid()
+    for unit, event in pairs({ target = "PLAYER_TARGET_CHANGED", focus = "PLAYER_FOCUS_CHANGED" }) do
+        index[unit] = 1
+        self:Hover(unit)
+        lu.assertEquals(self:Bars(), GROUP, unit .. " on raid1 of your group")
+        index[unit] = 5
+        self.ns[event](self.ns)
+        lu.assertEquals(self:Bars(), HIDDEN, unit .. " changed to raid5 of another group")
+        index[unit] = 1
+        self.ns[event](self.ns)
+        lu.assertEquals(self:Bars(), GROUP, unit .. " back on raid1")
+        self.UnitButton.OnLeave(self.button)
+    end
+end
+
+-- AC2, S12: the group puts a member of another group behind your raid frame (you are
+-- raid4 now), and later a member of your group.
+function TestShieldRedraws:testTheGroupHealFollowsARosterChangeUnderTheMouse()
+    local index, groups = self:Raid()
+    self.you.raid3 = true
+    self:Hover("raid3")
+    lu.assertEquals(self:Bars(), GROUP, "your raid frame")
+    self.you.raid3, self.you.raid4 = false, true
+    index.player, index.raid4, groups[3], groups[4] = 4, 4, 2, 1
+    self.ns:GROUP_ROSTER_UPDATE()
+    lu.assertEquals(self:Bars(), HIDDEN, "a member of another group behind it")
+    groups[3] = 1
+    self.ns:GROUP_ROSTER_UPDATE()
+    lu.assertEquals(self:Bars(), GROUP, "a member of your group behind it")
+end
+
+-- AC2, S13: the member behind the frame moves to another group and back, then you do.
+function TestShieldRedraws:testTheGroupHealFollowsAMoveToAnotherGroupUnderTheMouse()
+    local _, groups = self:Raid()
+    self:Hover("raid1")
+    lu.assertEquals(self:Bars(), GROUP, "raid1 of your group")
+    groups[1] = 2
+    self.ns:GROUP_ROSTER_UPDATE()
+    lu.assertEquals(self:Bars(), HIDDEN, "raid1 moved to group 2")
+    groups[1] = 1
+    self.ns:GROUP_ROSTER_UPDATE()
+    lu.assertEquals(self:Bars(), GROUP, "raid1 back in your group")
+    groups[3] = 2
+    self.ns:GROUP_ROSTER_UPDATE()
+    lu.assertEquals(self:Bars(), HIDDEN, "you moved to group 2")
+    groups[3] = 1
+    self.ns:GROUP_ROSTER_UPDATE()
+    lu.assertEquals(self:Bars(), GROUP, "you back in raid1's group")
+end
+
+-- AC3, S14: a member of your group out of range keeps its bars, in a raid and in a
+-- party; the range answer is read (the frame's fade), and the bars don't follow it.
+function TestShieldRedraws:testAGroupHealShowsOnAMemberOfYourGroupOutOfItsReach()
+    self:Raid()
+    local asked = 0
+    Override("UnitInRange", function() asked = asked + 1; return false, true end)
+    self:Hover("raid1")
+    self.ns:GROUP_ROSTER_UPDATE()
+    lu.assertEquals(self:Bars(), GROUP, "raid1 of your group, out of range")
+    self.UnitButton.OnLeave(self.button)
+    Override("IsInRaid", function() return false end)
+    Override("GetNumSubgroupMembers", function() return 1 end)
+    self:Hover("party1")
+    self.ns:GROUP_ROSTER_UPDATE()
+    lu.assertEquals(self:Bars(), GROUP, "party1, out of range")
+    lu.assertTrue(asked > 0, "the range was asked")
 end

@@ -141,6 +141,11 @@ local function InstallGlobals()
     Enum = { SpellBookSpellBank = { Player = 0 }, SpellBookItemType = { Spell = 1 }, TooltipDataType = { Unit = 2 },
              PowerType = { Mana = 0, Rage = 1, Energy = 3 } }
     UnitClass = function() return "Priest", "PRIEST" end
+    -- Solo until a test puts you in a group: no raid, no other party member, no
+    -- raid roster (spec/prediction_test.lua, the group heal's rows).
+    IsInRaid = function() return false end
+    GetNumSubgroupMembers = function() return 0 end
+    GetRaidRosterInfo = function() return nil end
 
     -- Modifier keys: none held until Support.SetModifiers.
     state.modifiers = {}
