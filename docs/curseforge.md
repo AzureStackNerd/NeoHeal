@@ -135,6 +135,12 @@ tag push does.
 | Game version | Only Forever (1.60.1); no Retail or Classic. The workflow reads the Interface from `NeoHeal.toc` (`## Interface: 16001`) and stops when CurseForge has no Forever version for it, so keep the two in line. |
 | Changelog | The `### <version>` section of this file, sent as Markdown |
 
+### 0.8.1
+
+- Fixed: a heal that only goes on you, such as a Priest's Desperate Prayer, now shows its heal prediction only on a frame that shows you (your own frame, your own raid frame, or the target or focus frame on you), no longer on other members' frames.
+- Fixed: a group heal you cast around yourself, such as a Priest's Prayer of Healing, now shows its heal prediction only on the frames of your group (your own, your party's, in a raid your own group's, and the target or focus frame on one of them), no longer on raid members of another group or on pets. A member of your group out of the heal's reach still shows it.
+- Known limit: Holy Nova still shows its heal prediction on every frame.
+
 ### 0.8.0
 
 - New: the cancel cue. While you cast a heal on a member by clicking their NeoHeal frame (or with a hover key), a thin band along the bottom of that frame's health bar shows gold while the heal is still needed, and turns red once the member is back above 90% health: cancel the cast and keep the mana, without restarting the five-second rule. It shows for heals on one member with a cast time, not for a res, a group heal or a cast from your action bar. "Show cancel cue" on the Layout page turns it off (on by default), and test mode shows both colours.
