@@ -72,7 +72,8 @@ complicated as Healbot").
     "A new spec file is added to the list in spec/run.lua, or it never runs.",
     "The addon's .lua files are CRLF: keep each file's line endings as they are.",
     "Mutations run in a copy of the addon files, Locales/ and spec/ under the scratch path, restored by copying the saved file back, never in the repository and never with git.",
-    "Never read ~/.claude/settings.json."
+    "Never read ~/.claude/settings.json.",
+    "Lookups go through the reader, not your own Read: where something is defined or called, which tests import a module, what a document says about a topic. Run `read-ask \"<question>\"` from the repository root. Read a file yourself only to edit it, to quote it exactly, or before you claim what a function does, and open the path:line the reader quotes before you build on it."
   ],
   "done": "Committed and pushed to main; a bug's issue closed as completed with a comment naming the commit, or a draft item's Status set to Done with the commit appended to its body. A release (version, tag, ZIP, CurseForge) only on Remco's word."
 }
