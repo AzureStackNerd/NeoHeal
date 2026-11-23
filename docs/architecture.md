@@ -261,7 +261,18 @@ charDB.bindings["shift-2"] = { action="spell", spellID=139, highestRank=true, ta
   takes `CanTakeOwnShield`, which asks `ShowsThePlayer` (the plain unit `player`,
   else `UnitIsUnit`) and refuses while an aura of the shield's own name is up. A
   hidden aura, a hidden name or a hidden `UnitIsUnit` refuses. That the other
-  absorbs only go on you is not checked in game. The shields come after them. `AnchorAmountBars` starts each shown bar at the end
+  absorbs only go on you is not checked in game. A heal is drawn unless
+  `CanTakeHeal` says it would not land there: `HealGoesOnOthers` reads the clicked
+  spell's name and the names of the ids `SELF_ONLY_HEALS` lists for your class (one
+  group of ids per spell, so every rank matches; a Priest's Desperate Prayer is
+  13908 and 19236, not checked in game), and only a readable clicked name that is
+  none of them goes on others. The names are read on every draw, never cached: a
+  cache would keep a nil from the first draw and treat the spell as landing on
+  others. `UnitClass` is read first and a nil or secret class counts as one it
+  can't tell, because a hidden value may not be a table key; a class the list does
+  not name has an empty list, so its heals go on others. A heal it can't tell, and
+  a heal that only goes on you, then takes `ShowsThePlayer`: bars on a frame that
+  shows you, none on another member's frame, as a self-only shield. The shields come after them. `AnchorAmountBars` starts each shown bar at the end
   of the last shown one, skipping hidden bars (in game a hidden, emptied bar
   kept its old fill width: [forever-api.md](forever-api.md), section 5).
   `UpdateHealth` and `UpdateAuras` redraw it, and while the mouse is over a

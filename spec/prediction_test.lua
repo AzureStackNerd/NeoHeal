@@ -5,8 +5,11 @@ local Support = require("support")
 local FLASH_HEAL = Support.FLASH_HEAL
 local POWER_WORD_SHIELD, ICE_BARRIER = Support.POWER_WORD_SHIELD, Support.ICE_BARRIER
 
--- Every fake spell learned: Flash Heal, Abolish Disease and both shields.
-local KNOWN = { Support.ABOLISH_DISEASE, POWER_WORD_SHIELD, Support.POWER_WORD_SHIELD_10, ICE_BARRIER }
+-- Every fake spell learned: Flash Heal, Abolish Disease, both shields, Desperate
+-- Prayer (its first id) and Prayer of Healing.
+local DESPERATE_PRAYER, DESPERATE_PRAYER_2 = Support.DESPERATE_PRAYER, Support.DESPERATE_PRAYER_2
+local KNOWN = { Support.ABOLISH_DISEASE, POWER_WORD_SHIELD, Support.POWER_WORD_SHIELD_10, ICE_BARRIER,
+                DESPERATE_PRAYER, Support.PRAYER_OF_HEALING }
 for _, spellID in ipairs(FLASH_HEAL) do table.insert(KNOWN, spellID) end
 
 local function Spell(spellID, highestRank, target)
@@ -699,4 +702,299 @@ function TestShieldRedraws:testTheBarFollowsYourOwnShieldComingAndGoing()
     self.buffs = {}
     self.UnitButton:UpdateAllAuras()
     lu.assertEquals(self:Shield(), 438, "your own Ice Barrier ended")
+end
+
+-- Which heal shows where (issue #20): a heal that only goes on you only on a frame
+-- that shows you, every other heal on every frame. Desperate Prayer stands in for a
+-- heal that only goes on you, Flash Heal for one on any friendly unit, Prayer of
+-- Healing for a group heal you cast on yourself. The descriptions are the fake's
+-- wording, not checked against the game's.
+local DESPERATE_PRAYER_TEXT = "Instantly heals the caster for 134 to 170."
+local PRAYER_OF_HEALING_TEXT = "A powerful prayer that heals party members within 30 yards for 312 to 333."
+local PRAYER = { 134, 170 - 134 }
+local FLASH = { 1887, 2193 - 1887 }
+
+local function BindDesperatePrayer(bindings, key, spellID)
+    spellID = spellID or DESPERATE_PRAYER
+    Support.SetDescription(spellID, DESPERATE_PRAYER_TEXT)
+    bindings[key or "1"] = Spell(spellID, false)
+end
+
+-- C_Spell.GetSpellName gives nothing for these spell ids, and the names in `renamed`
+-- for others; every other id as before. Undone by the next setUp (Support.Load).
+local function NameSpells(unnamed, renamed)
+    local getName = C_Spell.GetSpellName
+    C_Spell.GetSpellName = function(spellID)
+        for _, id in ipairs(unnamed) do
+            if spellID == id then return nil end
+        end
+        if renamed and renamed[spellID] then return renamed[spellID] end
+        return getName(spellID)
+    end
+    return getName
+end
+
+-- Combat as the fake can give it: InCombatLockdown says so and the auras are
+-- refused, as the game hides them in combat. No heal rule reads either; that the
+-- game hides nothing else the rule needs in combat is not checked in game.
+local function EnterCombat()
+    InCombatLockdown = function() return true end
+    C_UnitAuras.GetAuraDataByIndex = function() error("Auras cannot be accessed when secret while tainted") end
+end
+
+-- Hovers a frame of this unit, reads its heal bars and leaves it again.
+function TestHealPrediction:HealOn(unit)
+    self.button = Support.FakeButton(unit)
+    self.UnitButton.OnEnter(self.button)
+    local shown = self:Bars()
+    self.UnitButton.OnLeave(self.button)
+    return shown
+end
+
+-- UnitIsUnit as on a map where the game tells: your raid frame raid3 and the target
+-- frame (you target yourself) show you, nothing else does.
+local function YouAreRaid3AndTheTarget()
+    UnitIsUnit = function(a, b) return a == b or ((a == "raid3" or a == "target") and b == "player") end
+end
+
+-- AC1, S1 to S5.
+function TestHealPrediction:testAHealThatOnlyGoesOnYouShowsOnlyOnAFrameThatShowsYou()
+    BindDesperatePrayer(self.ns.charDB.bindings)
+    YouAreRaid3AndTheTarget()
+    lu.assertEquals(self:HealOn("party1"), HIDDEN, "another member's frame")
+    lu.assertEquals(self:HealOn("raid5"), HIDDEN, "another raid member's frame")
+    lu.assertEquals(self:HealOn("partypet1"), HIDDEN, "a pet's frame")
+    lu.assertEquals(self:HealOn("focus"), HIDDEN, "the focus frame on someone else")
+    lu.assertEquals(self:HealOn("player"), PRAYER, "your own frame")
+    lu.assertEquals(self:HealOn("raid3"), PRAYER, "your own raid frame")
+    lu.assertEquals(self:HealOn("target"), PRAYER, "the target frame on you")
+end
+
+-- AC1, S6: where the game hides whether a frame shows you, in and out of combat.
+function TestHealPrediction:testAHealThatOnlyGoesOnYouShowsNothingWhereTheGameHidesWhoIsYou()
+    local secret = {}
+    self:setUp(function(value) return rawequal(value, secret) end)
+    BindDesperatePrayer(self.ns.charDB.bindings)
+    UnitIsUnit = function() return secret end
+    for _, combat in ipairs({ "out of combat", "in combat" }) do
+        if combat == "in combat" then EnterCombat() end
+        lu.assertEquals(self:HealOn("raid3"), HIDDEN, "your own raid frame, " .. combat)
+        lu.assertEquals(self:HealOn("target"), HIDDEN, "the target frame, " .. combat)
+        lu.assertEquals(self:HealOn("focus"), HIDDEN, "the focus frame, " .. combat)
+        lu.assertEquals(self:HealOn("player"), PRAYER, "your own frame, " .. combat)
+    end
+end
+
+-- AC1, S7: in combat, on a map where the game tells whether a frame is you.
+function TestHealPrediction:testAHealThatOnlyGoesOnYouShowsOnlyOnAFrameThatShowsYouInCombat()
+    BindDesperatePrayer(self.ns.charDB.bindings)
+    YouAreRaid3AndTheTarget()
+    EnterCombat()
+    lu.assertEquals(self:HealOn("player"), PRAYER, "your own frame")
+    lu.assertEquals(self:HealOn("raid3"), PRAYER, "your own raid frame")
+    lu.assertEquals(self:HealOn("party1"), HIDDEN, "party1")
+end
+
+-- AC1, S8: Desperate Prayer on Shift + left click, Flash Heal on the plain left click.
+function TestHealPrediction:testAHealThatOnlyGoesOnYouOnAModifierFollowsTheModifierAndTheFrame()
+    BindDesperatePrayer(self.ns.charDB.bindings, "shift-1")
+    self.ns.charDB.bindings["1"] = Spell(FLASH_HEAL[7], false)
+    local own = Support.FakeButton("player")
+    self.UnitButton.OnEnter(self.button)   -- party1
+    lu.assertEquals(self:Bars(), FLASH, "party1")
+    PressModifiers({ shift = true })
+    lu.assertEquals(self:Bars(), HIDDEN, "party1 with Shift")
+    self.UnitButton.OnLeave(self.button)
+    self.button = own
+    self.UnitButton.OnEnter(own)
+    lu.assertEquals(self:Bars(), PRAYER, "your own frame with Shift")
+    PressModifiers({})
+    lu.assertEquals(self:Bars(), FLASH, "Shift released")
+end
+
+-- AC1, S16: no green bars on party1, and the incoming heals and the shield sit right
+-- after each other, as with no prediction.
+function TestHealPrediction:testAHiddenHealLeavesTheIncomingHealsAndShieldsInPlace()
+    BindDesperatePrayer(self.ns.charDB.bindings)
+    self.button.incoming:Show()
+    self.button.absorb:Show()
+    self.UnitButton.OnEnter(self.button)   -- party1
+    lu.assertEquals(self:Bars(), HIDDEN)
+    lu.assertEquals(self:Anchors(), { incoming = "health", absorb = "incoming" })
+end
+
+-- AC1, S17, first half: the game gives no name for the clicked spell. Flash Heal or
+-- Desperate Prayer alike: bars on your own frame, none on party1.
+function TestHealPrediction:testAHealThatCantBeToldApartShowsOnlyOnAFrameThatShowsYou()
+    self.ns.charDB.bindings["1"] = Spell(FLASH_HEAL[7], false)
+    NameSpells({ FLASH_HEAL[7] })
+    lu.assertEquals(self:HealOn("player"), FLASH, "Flash Heal unnamed, your own frame")
+    lu.assertEquals(self:HealOn("party1"), HIDDEN, "Flash Heal unnamed, party1")
+
+    self:setUp()
+    BindDesperatePrayer(self.ns.charDB.bindings)
+    NameSpells({ DESPERATE_PRAYER })
+    lu.assertEquals(self:HealOn("player"), PRAYER, "Desperate Prayer unnamed, your own frame")
+    lu.assertEquals(self:HealOn("party1"), HIDDEN, "Desperate Prayer unnamed, party1")
+end
+
+-- AC1, S17, second half: every id of the listed heal gives no name, so a named Flash
+-- Heal can't be told from it.
+function TestHealPrediction:testAHealThatCantBeToldApartWhenTheListedHealHasNoName()
+    self.ns.charDB.bindings["1"] = Spell(FLASH_HEAL[7], false)
+    NameSpells({ DESPERATE_PRAYER, DESPERATE_PRAYER_2 })
+    lu.assertEquals(self:HealOn("player"), FLASH, "your own frame")
+    lu.assertEquals(self:HealOn("party1"), HIDDEN, "party1")
+end
+
+-- The control for the row above: one id of the listed heal unnamed, the other named.
+-- The named one still tells Desperate Prayer apart (bound by that id here), and
+-- Flash Heal is not taken for it.
+function TestHealPrediction:testOneUnnamedIdOfTheListedHealIsEnough()
+    Support.SetKnown({ FLASH_HEAL[7], DESPERATE_PRAYER_2 })
+    BindDesperatePrayer(self.ns.charDB.bindings, "1", DESPERATE_PRAYER_2)
+    NameSpells({ DESPERATE_PRAYER })
+    lu.assertEquals(self:HealOn("party1"), HIDDEN, "Desperate Prayer on party1")
+    lu.assertEquals(self:HealOn("player"), PRAYER, "Desperate Prayer on your own frame")
+    self.ns.charDB.bindings["1"] = Spell(FLASH_HEAL[7], false)
+    lu.assertEquals(self:HealOn("party1"), FLASH, "Flash Heal on party1")
+
+    -- The other way round: 19236 unnamed, 13908 named.
+    self:setUp()
+    BindDesperatePrayer(self.ns.charDB.bindings)
+    NameSpells({ DESPERATE_PRAYER_2 })
+    lu.assertEquals(self:HealOn("party1"), HIDDEN, "19236 unnamed, Desperate Prayer on party1")
+    self.ns.charDB.bindings["1"] = Spell(FLASH_HEAL[7], false)
+    lu.assertEquals(self:HealOn("party1"), FLASH, "19236 unnamed, Flash Heal on party1")
+end
+
+-- Should the game hide a spell name (its API docs mark none as hidden: not checked in
+-- game), it counts as no name: the clicked spell's, or the listed heal's.
+function TestHealPrediction:testAHiddenSpellNameCantBeToldApart()
+    local secret = {}
+    self:setUp(function(value) return rawequal(value, secret) end)
+    self.ns.charDB.bindings["1"] = Spell(FLASH_HEAL[7], false)
+    NameSpells({}, { [FLASH_HEAL[7]] = secret })
+    lu.assertEquals(self:HealOn("player"), FLASH, "Flash Heal's name hidden, your own frame")
+    lu.assertEquals(self:HealOn("party1"), HIDDEN, "Flash Heal's name hidden, party1")
+
+    self:setUp(function(value) return rawequal(value, secret) end)
+    self.ns.charDB.bindings["1"] = Spell(FLASH_HEAL[7], false)
+    NameSpells({}, { [DESPERATE_PRAYER] = secret, [DESPERATE_PRAYER_2] = secret })
+    lu.assertEquals(self:HealOn("party1"), HIDDEN, "Desperate Prayer's names hidden, Flash Heal on party1")
+end
+
+-- Every name a listed heal's ids give counts, not only the first: should the first id
+-- name another spell, Desperate Prayer's own name still keeps it off party1.
+function TestHealPrediction:testEveryNameOfTheListedHealCounts()
+    Support.SetKnown({ FLASH_HEAL[7], DESPERATE_PRAYER_2 })
+    BindDesperatePrayer(self.ns.charDB.bindings, "1", DESPERATE_PRAYER_2)
+    NameSpells({}, { [DESPERATE_PRAYER] = "Renew" })
+    lu.assertEquals(self:HealOn("party1"), HIDDEN, "Desperate Prayer on party1")
+    lu.assertEquals(self:HealOn("player"), PRAYER, "Desperate Prayer on your own frame")
+end
+
+-- A name the game gave nothing for on the first hover is asked again on the next:
+-- a list kept from the first hover would count Desperate Prayer as a heal on any
+-- friendly unit for the rest of the session. The first hover is Flash Heal, whose own
+-- name is readable, so that draw does read the list; a clicked spell without a name
+-- would stop before it.
+function TestHealPrediction:testAListedHealNamedLaterStillCounts()
+    self.ns.charDB.bindings["1"] = Spell(FLASH_HEAL[7], false)
+    local getName = NameSpells({ DESPERATE_PRAYER, DESPERATE_PRAYER_2 })
+    lu.assertEquals(self:HealOn("party1"), HIDDEN, "no name yet, Flash Heal on party1")
+    C_Spell.GetSpellName = getName
+    lu.assertEquals(self:HealOn("party1"), FLASH, "named now, Flash Heal on party1")
+    BindDesperatePrayer(self.ns.charDB.bindings)
+    lu.assertEquals(self:HealOn("party1"), HIDDEN, "named now")
+    lu.assertEquals(self:HealOn("player"), PRAYER, "named now, your own frame")
+end
+
+-- A class with no heal that only goes on it in the list: its heals show everywhere.
+function TestHealPrediction:testAClassWithoutSuchHealsShowsItsHealsOnEveryFrame()
+    UnitClass = function() return "Shaman", "SHAMAN" end
+    lu.assertEquals(self:HealOn("party1"), FLASH, "party1")
+    lu.assertEquals(self:HealOn("player"), FLASH, "your own frame")
+end
+
+-- A class NeoHeal can't read (nothing, or a hidden value): every heal takes the safe
+-- side, bars only on a frame that shows you.
+function TestHealPrediction:testAClassThatCantBeReadShowsHealsOnlyOnAFrameThatShowsYou()
+    UnitClass = function() return nil end
+    lu.assertEquals(self:HealOn("player"), FLASH, "no class, your own frame")
+    lu.assertEquals(self:HealOn("party1"), HIDDEN, "no class, party1")
+
+    local hidden = "PRIEST (hidden)"
+    self:setUp(function(value) return value == hidden end)
+    UnitClass = function() return "Priest", hidden end
+    lu.assertEquals(self:HealOn("player"), FLASH, "a hidden class, your own frame")
+    lu.assertEquals(self:HealOn("party1"), HIDDEN, "a hidden class, party1")
+end
+
+-- AC2, S11 and S12: a heal on any friendly unit on every frame, in and out of combat,
+-- also where the game hides whether a frame shows you.
+function TestHealPrediction:testAHealOnAnyFriendlyUnitShowsOnEveryFrame()
+    YouAreRaid3AndTheTarget()
+    for _, unit in ipairs({ "player", "raid3", "party1", "raid5", "partypet1", "target", "focus" }) do
+        lu.assertEquals(self:HealOn(unit), FLASH, unit)
+    end
+    EnterCombat()
+    lu.assertEquals(self:HealOn("player"), FLASH, "your own frame in combat")
+    lu.assertEquals(self:HealOn("party1"), FLASH, "party1 in combat")
+
+    local secret = {}
+    self:setUp(function(value) return rawequal(value, secret) end)
+    UnitIsUnit = function() return secret end
+    for _, unit in ipairs({ "raid3", "target", "focus" }) do
+        lu.assertEquals(self:HealOn(unit), FLASH, unit .. " where the game hides who is you")
+    end
+end
+
+-- AC3, S13: Prayer of Healing on every frame, in and out of combat, as today.
+function TestHealPrediction:testAGroupHealYouCastOnYourselfShowsAsToday()
+    Support.SetDescription(Support.PRAYER_OF_HEALING, PRAYER_OF_HEALING_TEXT)
+    self.ns.charDB.bindings["1"] = Spell(Support.PRAYER_OF_HEALING, false)
+    local group = { 312, 333 - 312 }
+    for _, combat in ipairs({ "out of combat", "in combat" }) do
+        if combat == "in combat" then EnterCombat() end
+        for _, unit in ipairs({ "player", "party1", "raid12" }) do
+            lu.assertEquals(self:HealOn(unit), group, unit .. ", " .. combat)
+        end
+    end
+end
+
+-- The heal bars of the hovered wide button.
+function TestShieldRedraws:Bars()
+    return { Shows(self.button.prediction), Shows(self.button.predictionRange) }
+end
+
+-- AC1, S9: Desperate Prayer while the target or focus changes under the mouse.
+function TestShieldRedraws:testTheHealFollowsTheTargetOrFocusUnderTheMouse()
+    BindDesperatePrayer(self.ns.charDB.bindings)
+    for unit, event in pairs({ target = "PLAYER_TARGET_CHANGED", focus = "PLAYER_FOCUS_CHANGED" }) do
+        self.you[unit] = true
+        self:Hover(unit)
+        lu.assertEquals(self:Bars(), PRAYER, unit .. " on you")
+        self.you[unit] = false
+        self.ns[event](self.ns)
+        lu.assertEquals(self:Bars(), HIDDEN, unit .. " changed to party1")
+        self.you[unit] = true
+        self.ns[event](self.ns)
+        lu.assertEquals(self:Bars(), PRAYER, unit .. " back on you")
+        self.UnitButton.OnLeave(self.button)
+    end
+end
+
+-- AC1, S10: the group puts another member behind your raid frame, and later you again.
+function TestShieldRedraws:testTheHealFollowsARosterChangeUnderTheMouse()
+    BindDesperatePrayer(self.ns.charDB.bindings)
+    self.you.raid3 = true
+    self:Hover("raid3")
+    lu.assertEquals(self:Bars(), PRAYER, "your raid frame")
+    self.you.raid3 = false
+    self.ns:GROUP_ROSTER_UPDATE()
+    lu.assertEquals(self:Bars(), HIDDEN, "another member behind it")
+    self.you.raid3 = true
+    self.ns:GROUP_ROSTER_UPDATE()
+    lu.assertEquals(self:Bars(), PRAYER, "you again")
 end

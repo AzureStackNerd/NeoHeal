@@ -53,6 +53,14 @@ CATALOGUE[Support.RENEW] = { name = "Renew", subName = "Rank 1" }
 CATALOGUE[Support.HEALTH_FUNNEL] = { name = "Health Funnel", subName = "Rank 1" }
 CATALOGUE[Support.MIND_FLAY] = { name = "Mind Flay", subName = "Rank 1" }
 
+-- Desperate Prayer, a heal that only goes on you (spec/prediction_test.lua). Two
+-- ids stand for it, as in UnitButton.lua's list of such heals; both are Classic's
+-- as far as known, not checked in game. In no spellbook unless a test passes them.
+Support.DESPERATE_PRAYER = 13908
+Support.DESPERATE_PRAYER_2 = 19236
+CATALOGUE[Support.DESPERATE_PRAYER] = { name = "Desperate Prayer", subName = "Rank 1" }
+CATALOGUE[Support.DESPERATE_PRAYER_2] = { name = "Desperate Prayer", subName = "Rank 1" }
+
 local state = {
     book = {},              -- spell IDs in the spellbook, in order
     known = {},             -- [spellID] = true

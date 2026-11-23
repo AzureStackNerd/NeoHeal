@@ -246,22 +246,73 @@ local function CanTakeShield(unit, spellID)
     return CanTakeOwnShield(unit, name)
 end
 
+-- Heals that only ever go on you (a Priest's Desperate Prayer): per class, one group
+-- of ids per spell, turned into names at run time as GROUP_HEALS and HOT_SPELLS do,
+-- so every rank matches by name and a "highest rank" binding needs nothing extra.
+-- Two ids stand for Desperate Prayer: 13908 (as Wowhead's Classic pages list it, a
+-- third-party source) and 19236 (the same spell as far as known); which ids and
+-- ranks Forever has is not checked in game, and the second id keeps one missing id
+-- from counting every Priest heal as self-only. A deny-list: a heal it misses shows
+-- on other frames, the safer error against the reverse list taking the bars off
+-- every heal it misses. That it holds every self-only heal is not checked in game.
+local SELF_ONLY_HEALS = {
+    PRIEST = { { 13908, 19236 } },
+}
+
+-- Whether a heal on the left click would land on someone other than you, which is
+-- only known when the clicked spell's name is readable and so is a name of every
+-- group the list holds for your class, and the clicked name is none of them. The
+-- class comes first because a hidden value may not be used as a table key
+-- (UnitClass can give nothing, or a secret: docs/forever-api.md, section 2); a
+-- class the list has no entry for has an empty list, so its heals land on others (a
+-- Shaman's Chain Heal). Every name a group's ids give is collected, never only the
+-- first: an id that names another spell on Forever would otherwise keep the
+-- self-only spell's own name out of the list. False when that can't be told: a heal
+-- that may not land on the frame is not predicted, like a shield that may not land.
+local function HealGoesOnOthers(spellID)
+    local name = C_Spell.GetSpellName(spellID)
+    if IsSecret(name) or not name then return false end
+    local _, class = UnitClass("player")
+    if IsSecret(class) or not class then return false end
+    local names = {}
+    for _, group in ipairs(SELF_ONLY_HEALS[class] or {}) do
+        local named
+        for _, listedID in ipairs(group) do
+            local listed = C_Spell.GetSpellName(listedID)
+            if not IsSecret(listed) and listed then
+                names[listed] = true
+                named = true
+            end
+        end
+        if not named then return false end
+    end
+    return not names[name]
+end
+
+-- Whether a heal cast with this spell shows on this frame: one that goes on any
+-- friendly unit on every frame, a heal that only goes on you only where the frame
+-- shows you (ShowsThePlayer).
+local function CanTakeHeal(unit, spellID)
+    return HealGoesOnOthers(spellID) or ShowsThePlayer(unit)
+end
+
 -- Heal prediction: what your left click, with the modifiers held now, would heal
 -- the frame under the mouse (ClickCast:GetLeftClickAmount), right after the
 -- incoming heals. The lowest amount, which the heal always reaches, is drawn
 -- lighter than incoming heals; the rest of the range up to the highest amount,
 -- which it may reach, in the same green but fainter. A shield on the left click
 -- shows its absorb instead, in the blue of the tooltip, where that shield would
--- land (CanTakeShield). The amounts are plain numbers, so heals show in combat too
--- (seen in game on 2026-10-04): the StatusBar places them against the secret
--- maximum.
+-- land (CanTakeShield). A heal that only goes on you shows its bars only where the
+-- frame shows you (CanTakeHeal). The amounts are plain numbers, so heals show in
+-- combat too (seen in game on 2026-10-04): the StatusBar places them against the
+-- secret maximum.
 local function UpdateHealPrediction(button)
     local unit = button.unit
     local low, high, kind, spellID
     if button == hoveredButton and NeoHeal.db.layout.showHealPrediction and unit and not IsDeadOrOffline(unit) then
         low, high, kind, spellID = NeoHeal.ClickCast:GetLeftClickAmount()
     end
-    local heal = kind == "heal" and low
+    local heal = kind == "heal" and CanTakeHeal(unit, spellID) and low
     local absorb = kind == "absorb" and CanTakeShield(unit, spellID) and low
     ShowAmountBar(button.prediction, unit, heal)
     ShowAmountBar(button.predictionRange, unit, heal and high - low)

@@ -294,6 +294,19 @@ was the shield prediction out of combat). That shields other than Power Word:
 Shield only go on you, which absorbs beside it read as shields, and whether the
 game hides whether a raid frame is you are not checked in game.
 
+A heal that only goes on you, such as a Priest's Desperate Prayer, shows its green
+bars only on a frame that shows you (your own frame, your own raid frame, or the
+target or focus frame while it shows you), and nowhere else: the click never heals
+the member behind another frame. Where the game hides whether a frame is you, it
+shows nothing there. When NeoHeal can't tell what the heal is, it takes the same
+safe side: no name from the game for the clicked spell, no name for the heal it
+compares it with, or no class it can read, and its bars show only on a frame that
+shows you, as they do for a heal that only goes on you. The names it knows are a
+list per class of the heals that only go on you; that the list holds every such
+heal is not checked in game, and a heal it misses shows on other frames. A heal on
+any friendly unit, such as Flash Heal, keeps its bars on every frame, unless
+NeoHeal can't tell it apart either.
+
 Nothing shows when the left click:
 
 - does something other than cast a spell (Target, menu, missing buff), or casts on

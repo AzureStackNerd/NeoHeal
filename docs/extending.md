@@ -114,7 +114,9 @@ nothing else: LuaUnit is included as `spec/luaunit.lua`. The game never loads
   switch when a modifier changes), the heal prediction (which left click it
   reads, and its heal and shield bars on hover, with Weakened Soul and hidden
   auras, Power Word: Shield told apart from a shield that only goes on you and
-  the frames each shows on, and where each bar is anchored; `Support.FakeBar` records a bar and
+  the frames each shows on, a heal that only goes on you on the frames it shows
+  on (and an unnamed spell or unreadable class taking those same frames), and
+  where each bar is anchored; `Support.FakeBar` records a bar and
   `Support.FakeButton` holds a button's bars), clicks
   with modifiers (`RES_SNIPPET` runs as plain Lua with fakes for the secure
   environment), which keys the hover-key snippet takes over, which keys count
